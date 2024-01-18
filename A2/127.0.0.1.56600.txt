@@ -1,1 +1,0 @@
-his document defines the core of the QUIC transport protocol QUIC provides applications with flow controlled streams for structured communication, low latency connection establishment, and network path migration.
