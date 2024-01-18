@@ -8,6 +8,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#define FILE_ACCESS_SIZE 70 // using a different value in server just to show that it does not matter
+
 char* encrypt_word(char* word, int k){
     for (int i = 0; i < strlen(word); i++) {
         if (word[i] >= 'a' && word[i] <= 'z') 
@@ -22,7 +24,6 @@ int main() {
     int sockfd, newsockfd; 
     int clilen; 
     struct sockaddr_in cli_addr, serv_addr; 
-    char buf[100];
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -51,17 +52,15 @@ int main() {
             exit(0);
         }
 
-        // fork from here
-
         if (fork() == 0) {
             // keep receiving words from client
             int n, k;
 
             // receive k from client
-            char k_str[100];
-            n = recv(newsockfd, k_str, 100, 0);
-            k_str[n] = '\0';
+            char k_str[3];
+            recv(newsockfd, k_str, 3, 0);
             k = atoi(k_str);
+
 
             // make a new text file
             char filename[100];
@@ -73,7 +72,8 @@ int main() {
 
             int fd = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
-            while((n = recv(newsockfd, buf, 100, 0)) > 0) {
+            char buf[FILE_ACCESS_SIZE];
+            while((n = recv(newsockfd, buf, FILE_ACCESS_SIZE, 0)) > 0) {
                 // buf[n] = '\0';
                 if(buf[n-2] == '$') {
                     if(strlen(buf) == 2) {
@@ -82,10 +82,12 @@ int main() {
                     else{
                         buf[n-2] = '\0';
                         n -= 2;
+                        printf("Last word received: %s\n", buf);
                         write(fd, buf, n);
                     }
                     break;
                 }
+                // printf("Received: %s\n", buf);
                 write(fd, buf, n);
             }
             close(fd);
@@ -98,8 +100,8 @@ int main() {
 
             int enc_fd = open(enc_filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
-            char word[100];
-            while((n = read(fd, word, 100)) > 0) {
+            char word[FILE_ACCESS_SIZE];
+            while((n = read(fd, word, FILE_ACCESS_SIZE)) > 0) {
                 write(enc_fd, encrypt_word(word, k), n);
             }
 

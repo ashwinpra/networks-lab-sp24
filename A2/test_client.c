@@ -8,10 +8,11 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#define FILE_ACCESS_SIZE 50
+
 int main() {
     int sockfd; 
     struct sockaddr_in serv_addr; 
-    char buf[100];
 
     char filename[100];
 
@@ -42,21 +43,25 @@ int main() {
         inet_aton("127.0.0.1", &serv_addr.sin_addr);
         serv_addr.sin_port = htons(8383);
 
-        
-
         if((connect(sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr))) < 0) {
             perror("Unable to connect to server\n");
             exit(0);
         }
 
         // send k to server
-        char k_str[100];
-        sprintf(k_str, "%d", k);
+        char k_str[3];
+        if (k >= 10)
+            sprintf(k_str, "%d", k);
+        else
+            sprintf(k_str, "0%d", k);
         send(sockfd, k_str, strlen(k_str)+1, 0);
 
-        // read the contents of the file 100 bytes at a time
+
+        // read the contents of the file 50 bytes at a time
+        char buf[FILE_ACCESS_SIZE];
         int n;
-        while((n = read(fd, buf, 100)) > 0) {
+        while((n = read(fd, buf, FILE_ACCESS_SIZE)) > 0) {
+            printf("Sending: %s\n", buf);
             send(sockfd, buf, n, 0);
         }
 
@@ -73,8 +78,8 @@ int main() {
         fd = open(enc_filename, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
 
         // receive the encrypted file from server
-        char buf2[100];
-        while((n = recv(sockfd, buf2, 100, 0)) > 0) {
+        char buf2[FILE_ACCESS_SIZE];
+        while((n = recv(sockfd, buf2, FILE_ACCESS_SIZE, 0)) > 0) {
                 // buf2[n] = '\0';
                 if(buf2[n-2] == '$') {
                     if(strlen(buf2) == 2) {
