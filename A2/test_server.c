@@ -53,74 +53,76 @@ int main() {
 
         // fork from here
 
-        // keep receiving words from client
-        int n, k;
+        if (fork() == 0) {
+            // keep receiving words from client
+            int n, k;
 
-        // receive k from client
-        char k_str[100];
-        n = recv(newsockfd, k_str, 100, 0);
-        k_str[n] = '\0';
-        k = atoi(k_str);
+            // receive k from client
+            char k_str[100];
+            n = recv(newsockfd, k_str, 100, 0);
+            k_str[n] = '\0';
+            k = atoi(k_str);
 
-        // make a new text file
-        char filename[100];
-        strcpy(filename, inet_ntoa(cli_addr.sin_addr));
-        char port[20];
-        sprintf(port, ".%d", ntohs(cli_addr.sin_port));
-        strcat(filename, port);
-        strcat(filename, ".txt");
+            // make a new text file
+            char filename[100];
+            strcpy(filename, inet_ntoa(cli_addr.sin_addr));
+            char port[20];
+            sprintf(port, ".%d", ntohs(cli_addr.sin_port));
+            strcat(filename, port);
+            strcat(filename, ".txt");
 
-        int fd = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+            int fd = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
-        while((n = recv(newsockfd, buf, 100, 0)) > 0) {
-            // buf[n] = '\0';
-            if(buf[n-2] == '$') {
-                if(strlen(buf) == 2) {
-                    printf("EOF received.\n");
+            while((n = recv(newsockfd, buf, 100, 0)) > 0) {
+                // buf[n] = '\0';
+                if(buf[n-2] == '$') {
+                    if(strlen(buf) == 2) {
+                        printf("EOF received.\n");
+                    }
+                    else{
+                        buf[n-2] = '\0';
+                        n -= 2;
+                        write(fd, buf, n);
+                    }
+                    break;
                 }
-                else{
-                    buf[n-2] = '\0';
-                    n -= 2;
-                    write(fd, buf, n);
-                }
-                break;
+                write(fd, buf, n);
             }
-            write(fd, buf, n);
+            close(fd);
 
+            fd = open(filename, O_RDONLY);
+
+            char enc_filename[100];
+            strcpy(enc_filename, filename);
+            strcat(enc_filename, ".enc");
+
+            int enc_fd = open(enc_filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+
+            char word[100];
+            while((n = read(fd, word, 100)) > 0) {
+                write(enc_fd, encrypt_word(word, k), n);
+            }
+
+            close(fd);
+            close(enc_fd);
+
+            // send encrypted file back to client
+            fd = open(enc_filename, O_RDONLY);
+
+            char enc_word[100];
+            while((n = read(fd, enc_word, 100)) > 0) {
+                send(newsockfd, enc_word, n, 0);
+            }
+            // send EOF delimeter
+            strcpy(buf, "$");
+            send(newsockfd, buf, strlen(buf)+1, 0);
+            close(fd);
+
+            printf("Encrypted file sent to client.\n");
+
+            close(newsockfd);
+            exit(0);
         }
-        close(fd);
-
-        fd = open(filename, O_RDONLY);
-
-        char enc_filename[100];
-        strcpy(enc_filename, filename);
-        strcat(enc_filename, ".enc");
-
-        int enc_fd = open(enc_filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-
-        char word[100];
-        while((n = read(fd, word, 100)) > 0) {
-            write(enc_fd, encrypt_word(word, k), n);
-        }
-
-        close(fd);
-        close(enc_fd);
-
-        // send encrypted file back to client
-        fd = open(enc_filename, O_RDONLY);
-
-        char enc_word[100];
-        while((n = read(fd, enc_word, 100)) > 0) {
-            send(newsockfd, enc_word, n, 0);
-        }
-        // send EOF delimeter
-        strcpy(buf, "$");
-        send(newsockfd, buf, strlen(buf)+1, 0);
-        close(fd);
-
-        printf("Encrypted file sent to client.\n");
-
-        close(newsockfd);
     }
 
     return 0;
