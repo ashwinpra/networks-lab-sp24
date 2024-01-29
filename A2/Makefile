@@ -1,3 +1,5 @@
+# finally, run and test are same
+
 run: file_server.c file_client.c
 	gcc file_server.c -o fs
 	gcc file_client.c -o fc

@@ -5,24 +5,26 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#define FILE_ACCESS_SIZE 50
 
 int main() {
     int sockfd; 
     struct sockaddr_in serv_addr; 
-    char buf[100];
-
-    char filename[100];
 
     while(1) {
+
+        char filename[100];
         printf("File Encryption Client (Press Ctrl-C to quit anytime)\n");
         printf("Enter filename with extension: ");
         scanf("%s", filename);
 
         int fd = open(filename, O_RDONLY);
         while(fd < 0) {
-            printf("File not found. Enter filename (with extension): ");
+            printf("File not found. Enter filename with extension: ");
             scanf("%s", filename);
             fd = open(filename, O_RDONLY);
         }
@@ -42,21 +44,24 @@ int main() {
         inet_aton("127.0.0.1", &serv_addr.sin_addr);
         serv_addr.sin_port = htons(8383);
 
-        
-
         if((connect(sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr))) < 0) {
             perror("Unable to connect to server\n");
             exit(0);
         }
 
         // send k to server
-        char k_str[100];
-        sprintf(k_str, "%d", k);
+        // it is sent as a 2-character string, in case it is 1 digit, then 0 is prepended
+        char k_str[3];
+        if (k >= 10)
+            sprintf(k_str, "%d", k);
+        else
+            sprintf(k_str, "0%d", k);
         send(sockfd, k_str, strlen(k_str)+1, 0);
 
-        // read the contents of the file 100 bytes at a time
+        // read the contents of the file 50 bytes at a time, and send to server
+        char buf[FILE_ACCESS_SIZE];
         int n;
-        while((n = read(fd, buf, 100)) > 0) {
+        while((n = read(fd, buf, FILE_ACCESS_SIZE)) > 0) {
             send(sockfd, buf, n, 0);
         }
 
@@ -73,19 +78,19 @@ int main() {
         fd = open(enc_filename, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
 
         // receive the encrypted file from server
-        char buf2[100];
-        while((n = recv(sockfd, buf2, 100, 0)) > 0) {
-                // buf2[n] = '\0';
+        // receiving is done similar to how it was done in server
+        char buf2[FILE_ACCESS_SIZE];
+        while((n = recv(sockfd, buf2, FILE_ACCESS_SIZE, 0)) > 0) {
                 if(buf2[n-2] == '$') {
                     if(strlen(buf2) == 2) {
-                    
+                        break;
                     }
                     else{
                         buf2[n-2] = '\0';
                         n -= 2;
                         write(fd, buf2, n);
+                        break;
                     }
-                    break;
                 }
                 write(fd, buf2, n);
         }

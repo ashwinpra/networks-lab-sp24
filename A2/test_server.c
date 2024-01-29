@@ -5,10 +5,11 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h> 
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define FILE_ACCESS_SIZE 70 // using a different value in server just to show that it does not matter
+#define FILE_ACCESS_SIZE 70 // using a different value in server just to show that it does not have to be the same
 
 char* encrypt_word(char* word, int k){
     for (int i = 0; i < strlen(word); i++) {
@@ -43,6 +44,8 @@ int main() {
 
     listen (sockfd, 5);
 
+    printf("Server running...\n");
+
     while(1) {
         clilen = sizeof(cli_addr);
         newsockfd = accept(sockfd, (struct sockaddr*) &cli_addr, &clilen);
@@ -53,7 +56,6 @@ int main() {
         }
 
         if (fork() == 0) {
-            // keep receiving words from client
             int n, k;
 
             // receive k from client
@@ -61,8 +63,7 @@ int main() {
             recv(newsockfd, k_str, 3, 0);
             k = atoi(k_str);
 
-
-            // make a new text file
+            // making a new text file with naming convention as given in assignmemnt
             char filename[100];
             strcpy(filename, inet_ntoa(cli_addr.sin_addr));
             char port[20];
@@ -73,25 +74,26 @@ int main() {
             int fd = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
             char buf[FILE_ACCESS_SIZE];
+            // reading data from client 70 bytes at a time until EOF delimeter is received
             while((n = recv(newsockfd, buf, FILE_ACCESS_SIZE, 0)) > 0) {
-                // buf[n] = '\0';
                 if(buf[n-2] == '$') {
+                    // looking for EOF delimieter sent by client ($)
                     if(strlen(buf) == 2) {
-                        printf("EOF received.\n");
+                        break;
                     }
                     else{
                         buf[n-2] = '\0';
                         n -= 2;
-                        printf("Last word received: %s\n", buf);
                         write(fd, buf, n);
+                        break;
                     }
-                    break;
                 }
-                // printf("Received: %s\n", buf);
+                // writing it to the file
                 write(fd, buf, n);
             }
             close(fd);
 
+            // reopening the file as read-only to encrypt it
             fd = open(filename, O_RDONLY);
 
             char enc_filename[100];
@@ -100,6 +102,7 @@ int main() {
 
             int enc_fd = open(enc_filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 
+            // encrypting 70 bytes at a time and writing it to the encrypted file
             char word[FILE_ACCESS_SIZE];
             while((n = read(fd, word, FILE_ACCESS_SIZE)) > 0) {
                 write(enc_fd, encrypt_word(word, k), n);
@@ -111,13 +114,15 @@ int main() {
             // send encrypted file back to client
             fd = open(enc_filename, O_RDONLY);
 
-            char enc_word[100];
-            while((n = read(fd, enc_word, 100)) > 0) {
+            char enc_word[FILE_ACCESS_SIZE];
+            while((n = read(fd, enc_word, FILE_ACCESS_SIZE)) > 0) {
                 send(newsockfd, enc_word, n, 0);
             }
+
             // send EOF delimeter
             strcpy(buf, "$");
             send(newsockfd, buf, strlen(buf)+1, 0);
+
             close(fd);
 
             printf("Encrypted file sent to client.\n");

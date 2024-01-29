@@ -21,7 +21,7 @@ int main(int argc, char const *argv[])
     }
     int port = atoi(argv[1]);
 
-
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
     return 0;
 }
