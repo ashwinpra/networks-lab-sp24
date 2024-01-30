@@ -10,6 +10,8 @@
 #include <fcntl.h>
 #include <time.h>
 
+#define CRLF "\r\n"
+
 void append_mail(FILE *fp, char *mail) {
     fprintf(fp, "%s", mail);
 }
