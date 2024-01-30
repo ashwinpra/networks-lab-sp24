@@ -12,6 +12,7 @@
 
 #define MAX_LINE_LEN 80
 #define MAX_LINES 50 
+#define CRLF "\r\n"
 
 void strip(char* s) {
     char* start = s;
@@ -52,17 +53,62 @@ int get_choice() {
     return atoi(choice_str);
 }
 
+void get_mail_from_user(char* lines[MAX_LINES+3]) {
+
+    char line[MAX_LINE_LEN+1];
+    int n = 0;
+    fputs("Enter mail:\n", stdout);
+
+    while(1) {
+        fgets(line, MAX_LINE_LEN, stdin);
+        // strip extra spaces in between and newline at the end
+        strip(line);
+
+        if(n==0 || n==1 || n==2) {
+            char *token = strtok(line, " ");
+            if (n==0) {
+                if (strcmp(token, "From:") != 0) {
+                    printf("Mail should have a sender\n");
+                    break;
+                }
+            }
+            else if (n==1) {
+                if (strcmp(token, "To:") != 0) {
+                    printf("Mail should have a recipient\n");
+                    break;
+                }
+            }
+            else if (n==2) {
+                if (strcmp(token, "Subject:") != 0) {
+                    printf("Mail should have a subject\n");
+                    break;
+                }
+            }
+            lines[n++] = strtok(NULL, "\n");
+        }
+
+        else {
+            if(strcmp(line, ".") == 0) {
+                break;
+            }
+            lines[n++] = line;
+        }
+    }
+}
+
 int main(int argc, char const *argv[])
 {
     if (argc != 4){
         printf("Usage: %s <server_ip> <smtp_port> <pop3_port>\n", argv[0]);
         exit(0);
     }
+
     char *server_ip = argv[1];
     int smtp_port = atoi(argv[2]);
     int pop3_port = atoi(argv[3]);
 
     struct sockaddr_in server_addr;
+    char buf[MAX_LINE_LEN+2];
 
     char username[100], password[100];
     printf("Enter username: ");
@@ -81,67 +127,113 @@ int main(int argc, char const *argv[])
         }
         else if (choice==2) {
             // send mail
-            // int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-            // if (sockfd < 0){
-            //     perror("Cannot create socket\n");
-            //     exit(0);
-            // }
-
-            // server_addr.sin_family = AF_INET;
-            // inet_aton(server_ip, &server_addr.sin_addr);
-            // server_addr.sin_port = htons(pop3_port);
-
-            // if((connect(sockfd, (struct sockaddr*) &server_addr, sizeof(server_addr))) < 0) {
-            //     perror("Unable to connect to server\n");
-            //     exit(0);
-            // }
-
-            char line[MAX_LINE_LEN+2];
-            char *lines[MAX_LINES+3]; // 3 extra for From, To, Subject
-            int n = 0;
-            fputs("Enter mail:\n", stdout);
-
-            while(1) {
-                fgets(line, MAX_LINE_LEN, stdin);
-                // strip extra spaces in between and newline at the end
-                strip(line);
-
-                if(n==0 || n==1 || n==2) {
-                    char *token = strtok(line, " ");
-                    if (n==0) {
-                        if (strcmp(token, "From:") != 0) {
-                            printf("Mail should have a sender\n");
-                            break;
-                        }
-                    }
-                    else if (n==1) {
-                        if (strcmp(token, "To:") != 0) {
-                            printf("Mail should have a recipient\n");
-                            break;
-                        }
-                    }
-                    else if (n==2) {
-                        if (strcmp(token, "Subject:") != 0) {
-                            printf("Mail should have a subject\n");
-                            break;
-                        }
-                    }
-                    lines[n++] = strtok(NULL, "\n");
-                }
-
-                else {
-                    if(strcmp(line, ".") == 0) {
-                        break;
-                    }
-                    lines[n++] = line;
-                }
+            int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+            if (sockfd < 0){
+                perror("Cannot create socket\n");
+                exit(0);
             }
 
-            // mail is read and stored in lines array
-            // now initiate send to server
+            server_addr.sin_family = AF_INET;
+            inet_aton(server_ip, &server_addr.sin_addr);
+            server_addr.sin_port = htons(pop3_port);
 
+            if((connect(sockfd, (struct sockaddr*) &server_addr, sizeof(server_addr))) < 0) {
+                perror("Unable to connect to server\n");
+                exit(0);
+            }
+            
+            
+            // expected: 220
+            int bytes_read = recv(sockfd, buf, MAX_LINE_LEN, 0);
+
+            // send HELO 
+            strcpy(buf, "HELO ");
+            strcat(buf, server_ip);
+            strcat(buf, CRLF);
+
+            send(sockfd, buf, strlen(buf), 0);
+
+            // expected: 250 
+            bytes_read = recv(sockfd, buf, MAX_LINE_LEN, 0);
+
+            char *lines[MAX_LINES+3]; // 3 extra for From, To, Subject
+            get_mail_from_user(lines);
+
+            // send MAIL FROM
+            strcpy(buf, "MAIL FROM:<");
+            strcat(buf, lines[0]);
+            strcat(buf, ">");
+            strcat(buf, CRLF);
+
+            send(sockfd, buf, strlen(buf), 0);
+
+            // expected: 250 
+            recv(sockfd, buf, MAX_LINE_LEN, 0);
+
+            // send RCPT TO
+            strcpy(buf, "RCPT TO:<");
+            strcat(buf, lines[1]);
+            strcat(buf, ">");
+            strcat(buf, CRLF);
+
+            send(sockfd, buf, strlen(buf), 0);
+
+            // expected: 250 
+            recv(sockfd, buf, MAX_LINE_LEN, 0);
+
+            // send DATA
+            strcpy(buf, "DATA");
+            strcat(buf, CRLF);
+
+            send(sockfd, buf, strlen(buf), 0);
+
+            // expected: 354
+            recv(sockfd, buf, MAX_LINE_LEN, 0);
+
+            // send mail
+            int i=0; 
+            while(lines[i] != NULL) {
+                if(i==0)
+                    strcpy(buf, "From: ");
+                else if(i==1)
+                    strcpy(buf, "To: ");
+                else if(i==2)
+                    strcpy(buf, "Subject: ");
+                else 
+                    strcpy(buf, "");
+
+                strcat(buf, lines[i]);
+                strcat(buf, CRLF);
+                send(sockfd, buf, strlen(buf), 0);
+                i++;
+            }
+
+            // send .CRLF
+            strcpy(buf, ".");
+            strcat(buf, CRLF);
+
+            send(sockfd, buf, strlen(buf), 0);
+
+            // expected: 250
+            recv(sockfd, buf, MAX_LINE_LEN, 0);
+
+            // send QUIT
+            strcpy(buf, "QUIT");
+            strcat(buf, CRLF);
+
+            send(sockfd, buf, strlen(buf), 0);
+
+            // expected: 221
+            recv(sockfd, buf, MAX_LINE_LEN, 0);
+
+            close(sockfd);
+
+            // todo: split into functions
+            // todo: verify that status codes are correct
         }
+
         else if (choice==3) {
+            // quit
             break;
         }
 
@@ -149,6 +241,8 @@ int main(int argc, char const *argv[])
             printf("Invalid choice\n");
         }
     }
+
+
     
     return 0;
 }
