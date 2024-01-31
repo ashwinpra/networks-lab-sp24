@@ -176,18 +176,7 @@ int main(int argc, char *argv[])
             char temp[100];
 
             bzero(username,20);
-            int line=1;
-
-            bzero(buf, 100);
-            recv(newsockfd, buf, 100, 0);
-            printf("%s\n",buf);
-
-            int i=6;
-            for(i;i<strlen(buf);i++){
-                if(buf[i]=='@'){break;}
-                if(buf[i]!=' ')
-                username[i-6]=buf[i];
-            }
+            int line=0;
 
             char path[100],line1[100];
                 bzero(path,100);
