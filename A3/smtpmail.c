@@ -173,6 +173,8 @@ int main(int argc, char *argv[])
 
             //recieve mail from client
             char username[20];
+            char temp[100];
+
             bzero(username,20);
             int line=1;
 
@@ -187,44 +189,147 @@ int main(int argc, char *argv[])
                 username[i-6]=buf[i];
             }
 
-            char path[100];
+            char path[100],line1[100];
                 bzero(path,100);
-                strcpy(path,"./");
-                strcat(path,username);
-                strcat(path,"/mymailbox");
-                int fd=open(path,O_WRONLY|O_APPEND);
-                write(fd,buf,strlen(buf));
+                int fd;
                 
-
-            while(1){
+            bzero(temp,100);
+            int temp_index=0,buf_index=0,done=0;
+            while(!done){
                 bzero(buf, 100);
-                int n = recv(newsockfd, buf, 100, 0);
-                printf("%s\n%d\n%d\n",buf,strlen(buf), n);
-                if(n>=100) buf[n]='\0';
-                write(fd,buf,strlen(buf));
-                if(buf[n-1]=='\n'&&buf[n-2]=='\r' && buf[n-3]=='.' && buf[n-4]=='\n' && buf[n-5]=='\r'){
-                    printf("Mail recieved\n");
-                    bzero(buf, 100); 
-                    strcpy(buf, "250 OK Message accepted for delivery");
-                    strcat(buf, CRLF);
-                    send(newsockfd, buf, strlen(buf), 0);
-                    break;
-                }
-                
-                
-
                
-               line++;
+                int n = recv(newsockfd, buf, 100, 0);
+                // printf("%s\n%d\n%d\n",buf,strlen(buf), n);
+                if(n>=100) buf[n]='\0';
+               
+                buf_index=0;
+                
+                while(buf_index<n){
+                    if(buf[buf_index]=='\r'){
+                        if(buf_index==n-1){
+                            temp[temp_index++]=buf[buf_index++];
+                        }else{
+                            temp[temp_index++]=buf[buf_index++];
+                            temp[temp_index++]=buf[buf_index++];
+                            temp[temp_index++]='\0';
+                            line++;
+                            // printf("line %d\n",line);
+                            // printf("temp:%s",temp);
+                            
+                            if(line==1){
+                                strcpy(line1,temp);
+                                temp_index=0;
+                                bzero(temp,100);
+                            }else if(line==2){
+                                //get username from "TO: username@domain"
+                                int i=4;
+                                for(i;i<strlen(temp);i++){
+                                    if(temp[i]=='@'){break;}
+                                    if(temp[i]!=' ')
+                                    username[i-4]=temp[i];
+                                }
 
-                if(line==4){
-                    //write Received: <time at which received, in date : hour : minute>
-                    time_t t = time(NULL);
-                    struct tm tm = *localtime(&t);
-                    char time[100];
-                    bzero(time,100);
-                    sprintf(time,"Received: <%d-%d-%d : %d:%d>\r\n",tm.tm_mday,tm.tm_mon + 1,tm.tm_year + 1900,tm.tm_hour,tm.tm_min);
-                    write(fd,time,strlen(time));
+                                strcpy(path,"./");
+                                strcat(path,username);
+                                strcat(path,"/mymailbox");
+                                fd=open(path,O_WRONLY|O_APPEND);
+                                write(fd,line1,strlen(line1));
+                                write(fd,temp,strlen(temp));
+                                temp_index=0;
+                                bzero(temp,100);
 
+                            }else if(line==3){
+                                write(fd,temp,strlen(temp));
+                                temp_index=0;
+                                bzero(temp,100);
+
+                                time_t t = time(NULL);
+                                struct tm tm = *localtime(&t);
+                                char time[100];
+                                bzero(time,100);
+                                sprintf(time,"Received: <%d-%d-%d : %d:%d>\r\n",tm.tm_mday,tm.tm_mon + 1,tm.tm_year + 1900,tm.tm_hour,tm.tm_min);
+                                write(fd,time,strlen(time));
+
+                            }else if(strcmp(temp,".\r\n")==0){
+                                write(fd,temp,strlen(temp));
+                                temp_index=0;
+                                bzero(temp,100);
+
+
+                                printf("Mail recieved\n");
+                                bzero(buf, 100); 
+                                strcpy(buf, "250 OK Message accepted for delivery");
+                                strcat(buf, CRLF);
+                                send(newsockfd, buf, strlen(buf), 0);
+                                done=1;
+                                break;
+                            }else{
+                                write(fd,temp,strlen(temp));
+                                temp_index=0;
+                                bzero(temp,100);
+                            }
+                        }
+                    }else if(temp_index!=0 && (buf[buf_index]=='\n') && (temp[temp_index-1]=='\r')){
+                            temp[temp_index++]=buf[buf_index++];
+                            temp[temp_index++]='\0';
+                            line++;
+                            
+                            if(line==1){
+                                strcpy(line1,temp);
+                                temp_index=0;
+                                bzero(temp,100);
+                            }else if(line==2){
+                                //get username from "TO: username@domain"
+                                int i=4;
+                                for(i;i<strlen(temp);i++){
+                                    if(temp[i]=='@'){break;}
+                                    if(temp[i]!=' ')
+                                    username[i-4]=temp[i];
+                                }
+
+                                strcpy(path,"./");
+                                strcat(path,username);
+                                strcat(path,"/mymailbox");
+                                fd=open(path,O_WRONLY|O_APPEND);
+                                write(fd,line1,strlen(line1));
+                                write(fd,temp,strlen(temp));
+                                temp_index=0;
+                                bzero(temp,100);
+
+                            }else if(line==3){
+                                write(fd,temp,strlen(temp));
+                                temp_index=0;
+                                bzero(temp,100);
+
+                                time_t t = time(NULL);
+                                struct tm tm = *localtime(&t);
+                                char time[100];
+                                bzero(time,100);
+                                sprintf(time,"Received: <%d-%d-%d : %d:%d>\r\n",tm.tm_mday,tm.tm_mon + 1,tm.tm_year + 1900,tm.tm_hour,tm.tm_min);
+                                write(fd,time,strlen(time));
+
+                            }else if(strcmp(temp,".\r\n")==0){
+                                write(fd,temp,strlen(temp));
+                                temp_index=0;
+                                bzero(temp,100);
+
+
+                                printf("Mail recieved\n");
+                                bzero(buf, 100); 
+                                strcpy(buf, "250 OK Message accepted for delivery");
+                                strcat(buf, CRLF);
+                                send(newsockfd, buf, strlen(buf), 0);
+                                done=1;
+                                break;
+                            }else{
+                                write(fd,temp,strlen(temp));
+                                temp_index=0;
+                                bzero(temp,100);
+                            }
+                    }
+                    else{
+                        temp[temp_index++]=buf[buf_index++];
+                    }
                 }
             }
 
@@ -242,10 +347,6 @@ int main(int argc, char *argv[])
                 printf("Error: QUIT not recieved\n");
                 exit(0);
             }
-
-
-
-
 
 			close(newsockfd);
 			exit(0);
