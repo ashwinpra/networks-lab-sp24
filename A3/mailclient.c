@@ -55,7 +55,9 @@ int get_choice() {
 
 // gets mail and also check if format is correct
 int get_mail_from_user(char* lines[MAX_LINES+3]) {
-
+    for (int i=0; i<MAX_LINES+3; i++) {
+        lines[i] = NULL;
+    }
     char line[MAX_LINE_LEN+1];
     int n = 0;
     fputs("Enter mail:\n", stdout);

@@ -221,7 +221,6 @@ int main(int argc, char *argv[])
                                 strcpy(path,"./");
                                 strcat(path,username);
                                 strcat(path,"/mymailbox");
-                                printf("path: %s\n",path);
                                 fd=open(path,O_WRONLY|O_APPEND);
                                 write(fd,line1,strlen(line1));
                                 write(fd,temp,strlen(temp));
