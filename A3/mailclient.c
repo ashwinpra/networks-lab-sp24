@@ -53,7 +53,8 @@ int get_choice() {
     return atoi(choice_str);
 }
 
-void get_mail_from_user(char* lines[MAX_LINES+3]) {
+// gets mail and also check if format is correct
+int get_mail_from_user(char* lines[MAX_LINES+3]) {
 
     char line[MAX_LINE_LEN+1];
     int n = 0;
@@ -66,25 +67,28 @@ void get_mail_from_user(char* lines[MAX_LINES+3]) {
 
         if(n==0 || n==1 || n==2) {
             char *token = strtok(line, " ");
-            if (n==0) {
-                if (strcmp(token, "From:") != 0) {
-                    printf("Mail should have a sender\n");
-                    break;
-                }
-            }
-            else if (n==1) {
-                if (strcmp(token, "To:") != 0) {
-                    printf("Mail should have a recipient\n");
-                    break;
-                }
-            }
-            else if (n==2) {
-                if (strcmp(token, "Subject:") != 0) {
-                    printf("Mail should have a subject\n");
-                    break;
-                }
+            if ( (n==0 && strcmp(token, "From:") != 0) || 
+                 (n==1 && strcmp(token, "To:") != 0) || 
+                 (n==2 && strcmp(token, "Subject:") != 0) ) {
+                printf("Incorrect format\n");
+                return 0;
             }
             char* tok = strtok(NULL, "\n");
+
+            if(n==0 || n==1) {
+                // check if email is valid (should have exactly one @)
+                int at_count = 0;
+                for(int i=0; i<strlen(tok); i++) {
+                    if(tok[i] == '@') {
+                        at_count++;
+                    }
+                }
+                if(at_count != 1) {
+                    printf("Incorrect format\n");
+                    return 0;
+                }
+            }
+
             lines[n] = malloc(strlen(tok)+1);
             strcpy(lines[n], tok);
             n++;
@@ -99,10 +103,7 @@ void get_mail_from_user(char* lines[MAX_LINES+3]) {
             n++;
         }
     }
-
-    for(int i=0; i<n; i++) {
-        printf("Line %d: %s\n", i, lines[i]);
-    }
+    return 1;
 }
 
 int main(int argc, char const *argv[])
@@ -134,26 +135,23 @@ int main(int argc, char const *argv[])
         else if (choice==2) {
             // send mail
 
-            char *lines[MAX_LINES+3]; // 3 extra for From, To, Subject
-            get_mail_from_user(lines);
-
             int sockfd = socket(AF_INET, SOCK_STREAM, 0);
             if (sockfd < 0){
                 perror("Cannot create socket\n");
                 exit(0);
             }
 
-            // server_addr.sin_family = AF_INET;
-            // inet_aton(server_ip, &server_addr.sin_addr);
-            // server_addr.sin_port = htons(smtp_port);
+            server_addr.sin_family = AF_INET;
+            inet_aton(server_ip, &server_addr.sin_addr);
+            server_addr.sin_port = htons(smtp_port);
 
-            // if((connect(sockfd, (struct sockaddr*) &server_addr, sizeof(server_addr))) < 0) {
-            //     perror("Unable to connect to server\n");
-            //     exit(0);
-            // }
+            if((connect(sockfd, (struct sockaddr*) &server_addr, sizeof(server_addr))) < 0) {
+                perror("Unable to connect to server\n");
+                exit(0);
+            }
             
             // expected: 220
-            // int bytes_read = recv(sockfd, buf, MAX_LINE_LEN, 0);
+            int bytes_read = recv(sockfd, buf, MAX_LINE_LEN, 0);
 
             // send HELO 
             strcpy(buf, "HELO ");
@@ -163,10 +161,13 @@ int main(int argc, char const *argv[])
             send(sockfd, buf, strlen(buf), 0);
 
             // expected: 250 
-            // bytes_read = recv(sockfd, buf, MAX_LINE_LEN, 0);
+            bytes_read = recv(sockfd, buf, MAX_LINE_LEN, 0);
 
-            // char *lines[MAX_LINES+3]; // 3 extra for From, To, Subject
-            // get_mail_from_user(lines);
+            char *lines[MAX_LINES+3]; // 3 extra for From, To, Subject
+            int ret = get_mail_from_user(lines);
+            if(ret == 0) {
+                continue;
+            }
 
             // send MAIL FROM
             strcpy(buf, "MAIL FROM:<");
