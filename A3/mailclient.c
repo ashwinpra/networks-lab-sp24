@@ -108,6 +108,29 @@ int get_mail_from_user(char* lines[MAX_LINES+3]) {
     return 1;
 }
 
+void send_message(int sockfd, char *msg) {
+    char buf[MAX_LINE_LEN+2];
+    strcpy(buf, msg);
+    strcat(buf, CRLF);
+    send(sockfd, buf, strlen(buf), 0);
+}
+
+void receive_status(int sockfd, int expected) {
+    char buf[100];
+    bzero(buf, 100);
+    recv(sockfd, buf, 100, 0);
+    char num_str[4];
+    for(int i=0; i<3; i++) {
+        num_str[i] = buf[i];
+    }
+    num_str[3] = '\0';
+    int status = atoi(num_str);
+    if(status != expected) {
+        printf("In fn: Expected: %d\t Received: %d\n", expected, status);
+        exit(0);
+    }
+}
+
 int main(int argc, char const *argv[])
 {
     if (argc != 4){
@@ -153,17 +176,15 @@ int main(int argc, char const *argv[])
             }
             
             // expected: 220
-            int bytes_read = recv(sockfd, buf, MAX_LINE_LEN, 0);
+            receive_status(sockfd, 220);
 
             // send HELO 
             strcpy(buf, "HELO ");
             strcat(buf, server_ip);
-            strcat(buf, CRLF);
-
-            send(sockfd, buf, strlen(buf), 0);
+            send_message(sockfd, buf);
 
             // expected: 250 
-            bytes_read = recv(sockfd, buf, MAX_LINE_LEN, 0);
+            receive_status(sockfd, 250);
 
             char *lines[MAX_LINES+3]; // 3 extra for From, To, Subject
             int ret = get_mail_from_user(lines);
@@ -175,32 +196,26 @@ int main(int argc, char const *argv[])
             strcpy(buf, "MAIL FROM:<");
             strcat(buf, lines[0]);
             strcat(buf, ">");
-            strcat(buf, CRLF);
-
-            send(sockfd, buf, strlen(buf), 0);
+            send_message(sockfd, buf);
 
             // expected: 250 
-            recv(sockfd, buf, MAX_LINE_LEN, 0);
+            receive_status(sockfd, 250);
+
 
             // send RCPT TO
             strcpy(buf, "RCPT TO:<");
             strcat(buf, lines[1]);
             strcat(buf, ">");
-            strcat(buf, CRLF);
-
-            send(sockfd, buf, strlen(buf), 0);
+            send_message(sockfd, buf);
 
             // expected: 250 
-            recv(sockfd, buf, MAX_LINE_LEN, 0);
+            receive_status(sockfd, 250);
 
             // send DATA
-            strcpy(buf, "DATA");
-            strcat(buf, CRLF);
-
-            send(sockfd, buf, strlen(buf), 0);
+            send_message(sockfd, "DATA");
 
             // expected: 354
-            recv(sockfd, buf, MAX_LINE_LEN, 0);
+            receive_status(sockfd, 354);
 
             // send mail
             int i=0; 
@@ -214,29 +229,21 @@ int main(int argc, char const *argv[])
                 else 
                     strcpy(buf, "");
 
-                strcat(buf, lines[i]);
-                strcat(buf, CRLF);
-                send(sockfd, buf, strlen(buf), 0);
+                send_message(sockfd, strcat(buf, lines[i]));
                 i++;
             }
 
             // send .CRLF
-            strcpy(buf, ".");
-            strcat(buf, CRLF);
-
-            send(sockfd, buf, strlen(buf), 0);
+            send_message(sockfd, ".");
 
             // expected: 250
-            recv(sockfd, buf, MAX_LINE_LEN, 0);
+            receive_status(sockfd, 250);
 
             // send QUIT
-            strcpy(buf, "QUIT");
-            strcat(buf, CRLF);
-
-            send(sockfd, buf, strlen(buf), 0);
+            send_message(sockfd, "QUIT");
 
             // expected: 221
-            recv(sockfd, buf, MAX_LINE_LEN, 0);
+            receive_status(sockfd, 221);
 
             close(sockfd);
 
