@@ -84,15 +84,24 @@ void get_mail_from_user(char* lines[MAX_LINES+3]) {
                     break;
                 }
             }
-            lines[n++] = strtok(NULL, "\n");
+            char* tok = strtok(NULL, "\n");
+            lines[n] = malloc(strlen(tok)+1);
+            strcpy(lines[n], tok);
+            n++;
         }
 
         else {
             if(strcmp(line, ".") == 0) {
                 break;
             }
-            lines[n++] = line;
+            lines[n] = malloc(strlen(line)+1);
+            strcpy(lines[n], line);
+            n++;
         }
+    }
+
+    for(int i=0; i<n; i++) {
+        printf("Line %d: %s\n", i, lines[i]);
     }
 }
 
@@ -116,9 +125,6 @@ int main(int argc, char const *argv[])
     printf("Enter password: ");
     fgets(password, 100, stdin);
 
-    server_addr.sin_port = htons(smtp_port);
-    server_addr.sin_addr.s_addr = inet_addr(server_ip);
-
     while (1) {
         int choice = get_choice();
 
@@ -127,24 +133,27 @@ int main(int argc, char const *argv[])
         }
         else if (choice==2) {
             // send mail
+
+            char *lines[MAX_LINES+3]; // 3 extra for From, To, Subject
+            get_mail_from_user(lines);
+
             int sockfd = socket(AF_INET, SOCK_STREAM, 0);
             if (sockfd < 0){
                 perror("Cannot create socket\n");
                 exit(0);
             }
 
-            server_addr.sin_family = AF_INET;
-            inet_aton(server_ip, &server_addr.sin_addr);
-            server_addr.sin_port = htons(pop3_port);
+            // server_addr.sin_family = AF_INET;
+            // inet_aton(server_ip, &server_addr.sin_addr);
+            // server_addr.sin_port = htons(smtp_port);
 
-            if((connect(sockfd, (struct sockaddr*) &server_addr, sizeof(server_addr))) < 0) {
-                perror("Unable to connect to server\n");
-                exit(0);
-            }
-            
+            // if((connect(sockfd, (struct sockaddr*) &server_addr, sizeof(server_addr))) < 0) {
+            //     perror("Unable to connect to server\n");
+            //     exit(0);
+            // }
             
             // expected: 220
-            int bytes_read = recv(sockfd, buf, MAX_LINE_LEN, 0);
+            // int bytes_read = recv(sockfd, buf, MAX_LINE_LEN, 0);
 
             // send HELO 
             strcpy(buf, "HELO ");
@@ -154,10 +163,10 @@ int main(int argc, char const *argv[])
             send(sockfd, buf, strlen(buf), 0);
 
             // expected: 250 
-            bytes_read = recv(sockfd, buf, MAX_LINE_LEN, 0);
+            // bytes_read = recv(sockfd, buf, MAX_LINE_LEN, 0);
 
-            char *lines[MAX_LINES+3]; // 3 extra for From, To, Subject
-            get_mail_from_user(lines);
+            // char *lines[MAX_LINES+3]; // 3 extra for From, To, Subject
+            // get_mail_from_user(lines);
 
             // send MAIL FROM
             strcpy(buf, "MAIL FROM:<");
