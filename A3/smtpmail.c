@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
                 
                 char temp[20];
                 bzero(temp,20);
-                int i=10,fl=0;
+                int i=10,fl=0,j=0;
                 //get domain from < > 
                 for(i;i<strlen(buf);i++){
                     if(buf[i]=='<'){
@@ -123,8 +123,9 @@ int main(int argc, char *argv[])
                     }
                     if(buf[i]=='>'){break;}
                     if(fl==1)
-                        temp[i-10]=buf[i];
+                        temp[j++]=buf[i];
                 }
+
 
                 bzero(buf, 100);
                 strcpy(buf, "250 ");
@@ -140,6 +141,7 @@ int main(int argc, char *argv[])
 			
 
             //recieve RCPT TO from client
+            bzero(buf,100);
             recv(newsockfd, buf, 100, 0);
 
             if(strncmp(buf,"RCPT TO",7)==0){
