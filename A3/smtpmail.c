@@ -1,3 +1,10 @@
+/*
+    Networks Lab Assignment 3
+    SMTP Mail Server 
+    Sarika Bishnoi 21CS10058
+    Ashwin Prasanth 21CS30009
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -134,7 +141,6 @@ int main(int argc, char *argv[])
                 strcat(buf, temp);
                 strcat(buf, "... Sender ok");
                 strcat(buf, CRLF);
-                printf("%s\n",buf);
                 send(newsockfd, buf, strlen(buf), 0);
             }
             else{

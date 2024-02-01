@@ -1,10 +1,17 @@
+/*
+    Networks Lab Assignment 3
+    SMTP Mail Client 
+    Sarika Bishnoi 21CS10058
+    Ashwin Prasanth 21CS30009
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include  <netinet/in.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <time.h>
@@ -195,6 +202,9 @@ int main(int argc, char const *argv[])
             char *lines[MAX_LINES+3]; // 3 extra for From, To, Subject
             int ret = get_mail_from_user(lines);
             if(ret == 0) {
+                send_message(sockfd, "QUIT");
+                receive_status(sockfd, 221);
+                close(sockfd);
                 continue;
             }
 
