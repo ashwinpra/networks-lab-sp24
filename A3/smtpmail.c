@@ -139,6 +139,13 @@ int main(int argc, char *argv[])
                 exit(0);
             }
 			
+            char username[20];
+            char temp[100];
+            int fd;
+            char path[100],line1[100];
+                bzero(path,100);
+
+            bzero(username,20);
 
             //recieve RCPT TO from client
             bzero(buf,100);
@@ -147,8 +154,35 @@ int main(int argc, char *argv[])
             if(strncmp(buf,"RCPT TO",7)==0){
                 printf("RCPT TO recieved\n");
                 printf("%s\n",buf);
-              
+
+                int i=7,fl=0,j=0;
+                //get domain from < > 
+                for(i;i<strlen(buf);i++){
+                    if(buf[i]=='<'){
+                        fl=1;continue;
+                    }
+                    if(buf[i]=='@'){break;}
+                    if(fl==1)
+                        username[j++]=buf[i];
+                }
+
+                printf("username : %s\n",username);
+
+                                strcpy(path,"./");
+                                strcat(path,username);
+                                strcat(path,"/mymailbox");
+                                fd=open(path,O_WRONLY|O_APPEND);
                 bzero(buf, 100);
+                if(fd==-1){
+                    printf("no usrr\n");
+                    strcpy(buf, "550 No such user");
+                    strcat(buf, CRLF);
+                    send(newsockfd, buf, strlen(buf), 0);
+                    close(newsockfd);
+                    exit(0);
+                }
+              
+                
                 strcpy(buf, "250 root... Recipient ok ");
                 strcat(buf, CRLF);
                 send(newsockfd, buf, strlen(buf), 0);
@@ -174,15 +208,11 @@ int main(int argc, char *argv[])
             }
 
             //recieve mail from client
-            char username[20];
-            char temp[100];
-
-            bzero(username,20);
+           
             int line=0;
 
-            char path[100],line1[100];
-                bzero(path,100);
-                int fd;
+            
+                
                 
             bzero(temp,100);
             int temp_index=0,buf_index=0,done=0;
@@ -220,10 +250,7 @@ int main(int argc, char *argv[])
                                     username[i-4]=temp[i];
                                 }
 
-                                strcpy(path,"./");
-                                strcat(path,username);
-                                strcat(path,"/mymailbox");
-                                fd=open(path,O_WRONLY|O_APPEND);
+                                
                                 write(fd,line1,strlen(line1));
                                 write(fd,temp,strlen(temp));
                                 temp_index=0;
@@ -278,10 +305,6 @@ int main(int argc, char *argv[])
                                     username[i-4]=temp[i];
                                 }
 
-                                strcpy(path,"./");
-                                strcat(path,username);
-                                strcat(path,"/mymailbox");
-                                fd=open(path,O_WRONLY|O_APPEND);
                                 write(fd,line1,strlen(line1));
                                 write(fd,temp,strlen(temp));
                                 temp_index=0;
@@ -325,9 +348,12 @@ int main(int argc, char *argv[])
             }
 
             //recieve QUIT from client
+            bzero(buf,100);
             recv(newsockfd, buf, 100, 0);
 
-            if(strncmp(buf,"QUIT",4)==0){
+            printf("%s\n",buf);
+
+            if(strcmp(buf,"QUIT\r\n")==0){
                 printf("QUIT recieved\n");
               
                 bzero(buf, 100);
@@ -339,6 +365,7 @@ int main(int argc, char *argv[])
                 exit(0);
             }
 
+            close(fd);
 			close(newsockfd);
 			exit(0);
 		}
