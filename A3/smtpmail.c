@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
 
 			//send 220 <iitkgp.edu> Service ready to the client
             bzero(buf, 100);
-			strcpy(buf, "220 <iitkgp.edu> Service ready\n");
+			strcpy(buf, "220 <iitkgp.edu> Service ready\r\n");
 			send(newsockfd, buf, strlen(buf), 0);
 
 			//recieve HELO from client
@@ -96,6 +96,7 @@ int main(int argc, char *argv[])
                 bzero(buf, 100);
                 strcpy(buf, "250 OK Hello ");
                 strcat(buf, temp);
+                strcat(buf, CRLF);
                 printf("temp : %s\n",temp);
                 printf("helo : test %s\n",buf);
                 send(newsockfd, buf, strlen(buf), 0);
