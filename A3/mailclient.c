@@ -129,7 +129,7 @@ int receive_status(int sockfd, int expected) {
     int status = atoi(num_str);
     if(status != expected) {
         if(status==550) printf("Error in sending mail: %s\n", buf);
-        send_message(sockfd, "QUIT");
+        send_message(sockfd, "QUIT\r\n");
         return 0;
     }
     return 1;

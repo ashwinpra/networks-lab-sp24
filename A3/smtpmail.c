@@ -12,6 +12,22 @@
 
 #define CRLF "\r\n"
 
+int receive_command(int sockfd, char* expected_command, char* buf) {
+    bzero(buf, 100);
+    recv(sockfd, buf, 100, 0);
+    if (strncmp(buf, expected_command, strlen(expected_command)) == 0) {
+        return 1;
+    }
+    else if(strncmp(buf,"QUIT",4)==0){
+        printf("QUIT received\n\n");
+        bzero(buf, 100);
+        strcpy(buf, "221 <iitkgp.edu> closing connection");
+        strcat(buf, CRLF);
+        send(sockfd, buf, strlen(buf), 0);
+        exit(0);
+    }
+    return 0;
+}
 int main(int argc, char *argv[])
 {
 	int sockfd, newsockfd ; 
@@ -56,7 +72,6 @@ int main(int argc, char *argv[])
 
 			close(sockfd);	
 
-
 			int client_port;
 			char client_ip[INET_ADDRSTRLEN];
 
@@ -76,13 +91,9 @@ int main(int argc, char *argv[])
 			strcpy(buf, "220 <iitkgp.edu> Service ready\r\n");
 			send(newsockfd, buf, strlen(buf), 0);
 
-			//recieve HELO from client
-			recv(newsockfd, buf, 100, 0);
-
-            if(strncmp(buf,"HELO",4)==0){
-                printf("HELO recieved\n");
+            //receive HELO from client
+            if(receive_command(newsockfd, "HELO", buf)) {
                 printf("%s\n",buf);
-                
                 char temp[20];
                 bzero(temp,20);
                 for(int i=5; i<strlen(buf); i++){
@@ -94,19 +105,15 @@ int main(int argc, char *argv[])
                 strcpy(buf, "250 OK Hello ");
                 strcat(buf, temp);
                 strcat(buf, CRLF);
-                printf("%s\n",buf);
                 send(newsockfd, buf, strlen(buf), 0);
-            }else{
-                printf("Error: HELO not recieved\n");
+            }
+            else{
+                printf("Error: HELO not received\n");
                 exit(0);
             }
 
-
-            //recieve MAIL FROM from client
-            recv(newsockfd, buf, 100, 0);
-
-            if(strncmp(buf,"MAIL FROM",9)==0){
-                printf("MAIL FROM recieved\n");
+            //receive MAIL FROM from client
+            if(receive_command(newsockfd, "MAIL FROM", buf)){
                 printf("%s\n",buf);
                 
                 char temp[20];
@@ -122,7 +129,6 @@ int main(int argc, char *argv[])
                         temp[j++]=buf[i];
                 }
 
-
                 bzero(buf, 100);
                 strcpy(buf, "250 ");
                 strcat(buf, temp);
@@ -130,8 +136,9 @@ int main(int argc, char *argv[])
                 strcat(buf, CRLF);
                 printf("%s\n",buf);
                 send(newsockfd, buf, strlen(buf), 0);
-            }else{
-                printf("Error: MAIL FROM not recieved\n");
+            }
+            else{
+                printf("Error: MAIL FROM not received\n");
                 exit(0);
             }
 			
@@ -139,16 +146,11 @@ int main(int argc, char *argv[])
             char temp[100];
             int fd;
             char path[100],line1[100];
-                bzero(path,100);
-
+            bzero(path,100);
             bzero(username,20);
 
-            //recieve RCPT TO from client
-            bzero(buf,100);
-            recv(newsockfd, buf, 100, 0);
-
-            if(strncmp(buf,"RCPT TO",7)==0){
-                printf("RCPT TO recieved\n");
+            //receive RCPT TO from client
+            if(receive_command(newsockfd, "RCPT TO", buf)){
                 printf("%s\n",buf);
 
                 int fl=0,j=0;
@@ -162,7 +164,6 @@ int main(int argc, char *argv[])
                         username[j++]=buf[i];
                 }
 
-
                 strcpy(path,"./");
                 strcat(path,username);
                 strcat(path,"/mymailbox");
@@ -174,53 +175,50 @@ int main(int argc, char *argv[])
                     strcpy(buf, "550 No such user");
                     strcat(buf, CRLF);
                     send(newsockfd, buf, strlen(buf), 0);
+                    if(receive_command(newsockfd, "QUIT", buf)){
+                        printf("QUIT received\n");
+                        bzero(buf, 100);
+                        strcpy(buf, "221 <iitkgp.edu> closing connection");
+                        strcat(buf, CRLF);
+                        send(newsockfd, buf, strlen(buf), 0);
+                    }
                     close(newsockfd);
                     exit(0);
                 }
               
-                
                 strcpy(buf, "250 root... Recipient ok ");
                 strcat(buf, CRLF);
                 send(newsockfd, buf, strlen(buf), 0);
-            }else{
-                printf("Error: RCPT TO not recieved\n");
+            }
+            else{
+                printf("Error: RCPT TO not received\n");
                 exit(0);
             }
 
-            //recieve DATA from client
-            recv(newsockfd, buf, 100, 0);
-
-            if(strncmp(buf,"DATA",4)==0){
-                printf("DATA recieved\n");
-                
-              
+            //receive DATA from client
+            if(receive_command(newsockfd, "DATA", buf)){
+                printf("DATA received\n\n");
                 bzero(buf, 100);
                 strcpy(buf, "354 Enter mail, end with \".\" on a line by itself");
                 strcat(buf, CRLF);
                 send(newsockfd, buf, strlen(buf), 0);
-            }else{
-                printf("Error: DATA not recieved\n");
+            }
+            else{
+                printf("Error: DATA not received\n");
                 exit(0);
             }
 
-            //recieve mail from client
-           
+            //receive mail from client
             int line=0;
-
-            
-                
-                
             bzero(temp,100);
             int temp_index=0,buf_index=0,done=0;
             while(!done){
                 bzero(buf, 100);
                
                 int n = recv(newsockfd, buf, 100, 0);
-                // printf("%s\n%d\n%d\n",buf,strlen(buf), n);
                 if(n>=100) buf[n]='\0';
                
                 buf_index=0;
-                
                 while(buf_index<n){
                     if(buf[buf_index]=='\r'){
                         if(buf_index==n-1){
@@ -230,28 +228,25 @@ int main(int argc, char *argv[])
                             temp[temp_index++]=buf[buf_index++];
                             temp[temp_index++]='\0';
                             line++;
-                            // printf("line %d\n",line);
-                            // printf("temp:%s",temp);
                             
                             if(line==1){
                                 strcpy(line1,temp);
                                 temp_index=0;
                                 bzero(temp,100);
-                            }else if(line==2){
-                                //get username from "TO: username@domain"
+                            }
+                            else if(line==2){
                                 for(int i=4; i<strlen(temp); i++){
                                     if(temp[i]=='@'){break;}
                                     if(temp[i]!=' ')
                                     username[i-4]=temp[i];
                                 }
-
-                                
                                 write(fd,line1,strlen(line1));
                                 write(fd,temp,strlen(temp));
                                 temp_index=0;
                                 bzero(temp,100);
 
-                            }else if(line==3){
+                            }
+                            else if(line==3){
                                 write(fd,temp,strlen(temp));
                                 temp_index=0;
                                 bzero(temp,100);
@@ -263,24 +258,28 @@ int main(int argc, char *argv[])
                                 sprintf(time,"Received: <%d-%d-%d : %d:%d>\r\n",tm.tm_mday,tm.tm_mon + 1,tm.tm_year + 1900,tm.tm_hour,tm.tm_min);
                                 write(fd,time,strlen(time));
 
-                            }else if(strcmp(temp,".\r\n")==0){
+                            
+                            }
+                            else if(strcmp(temp,".\r\n")==0){
                                 write(fd,temp,strlen(temp));
                                 temp_index=0;
                                 bzero(temp,100);
-                                printf("Mail recieved\n");
+                                printf("Mail received\n\n");
                                 bzero(buf, 100); 
                                 strcpy(buf, "250 OK Message accepted for delivery");
                                 strcat(buf, CRLF);
                                 send(newsockfd, buf, strlen(buf), 0);
                                 done=1;
                                 break;
-                            }else{
+                            }
+                            else{
                                 write(fd,temp,strlen(temp));
                                 temp_index=0;
                                 bzero(temp,100);
                             }
                         }
-                    }else if(temp_index!=0 && (buf[buf_index]=='\n') && (temp[temp_index-1]=='\r')){
+                    }
+                    else if(temp_index!=0 && (buf[buf_index]=='\n') && (temp[temp_index-1]=='\r')){
                             temp[temp_index++]=buf[buf_index++];
                             temp[temp_index++]='\0';
                             line++;
@@ -289,7 +288,8 @@ int main(int argc, char *argv[])
                                 strcpy(line1,temp);
                                 temp_index=0;
                                 bzero(temp,100);
-                            }else if(line==2){
+                            }
+                            else if(line==2){
                                 //get username from "TO: username@domain"
                                 for(int i=4; i<strlen(temp); i++){
                                     if(temp[i]=='@'){break;}
@@ -302,7 +302,8 @@ int main(int argc, char *argv[])
                                 temp_index=0;
                                 bzero(temp,100);
 
-                            }else if(line==3){
+                            }
+                            else if(line==3){
                                 write(fd,temp,strlen(temp));
                                 temp_index=0;
                                 bzero(temp,100);
@@ -314,20 +315,22 @@ int main(int argc, char *argv[])
                                 sprintf(time,"Received: <%d-%d-%d : %d:%d>\r\n",tm.tm_mday,tm.tm_mon + 1,tm.tm_year + 1900,tm.tm_hour,tm.tm_min);
                                 write(fd,time,strlen(time));
 
-                            }else if(strcmp(temp,".\r\n")==0){
+                            }
+                            else if(strcmp(temp,".\r\n")==0){
                                 write(fd,temp,strlen(temp));
                                 temp_index=0;
                                 bzero(temp,100);
 
 
-                                printf("Mail recieved\n");
+                                printf("Mail received\n");
                                 bzero(buf, 100); 
                                 strcpy(buf, "250 OK Message accepted for delivery");
                                 strcat(buf, CRLF);
                                 send(newsockfd, buf, strlen(buf), 0);
                                 done=1;
                                 break;
-                            }else{
+                            }
+                            else{
                                 write(fd,temp,strlen(temp));
                                 temp_index=0;
                                 bzero(temp,100);
@@ -339,19 +342,16 @@ int main(int argc, char *argv[])
                 }
             }
 
-            //recieve QUIT from client
-            bzero(buf,100);
-            recv(newsockfd, buf, 100, 0);
-
-            if(strcmp(buf,"QUIT\r\n")==0){
-                printf("QUIT recieved\n");
-              
+            //receive QUIT from client
+            if(receive_command(newsockfd, "QUIT", buf)){
+                printf("QUIT received\n\n");
                 bzero(buf, 100);
                 strcpy(buf, "221 <iitkgp.edu> closing connection");
                 strcat(buf, CRLF);
                 send(newsockfd, buf, strlen(buf), 0);
-            }else{
-                printf("Error: QUIT not recieved\n");
+            }
+            else{
+                printf("Error: QUIT not received\n");
                 exit(0);
             }
 
