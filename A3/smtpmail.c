@@ -12,7 +12,6 @@
 
 #define CRLF "\r\n"
 
-
 int main(int argc, char *argv[])
 {
 	int			sockfd, newsockfd ; /* Socket descriptors */

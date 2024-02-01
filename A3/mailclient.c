@@ -110,6 +110,7 @@ int get_mail_from_user(char* lines[MAX_LINES+3]) {
 
 void send_message(int sockfd, char *msg) {
     char buf[MAX_LINE_LEN+2];
+    bzero(buf, MAX_LINE_LEN+2);
     strcpy(buf, msg);
     strcat(buf, CRLF);
     send(sockfd, buf, strlen(buf), 0);
@@ -127,6 +128,7 @@ void receive_status(int sockfd, int expected) {
     int status = atoi(num_str);
     if(status != expected) {
         printf("In fn: Expected: %d\t Received: %d\n", expected, status);
+        send_message(sockfd, "QUIT");
         exit(0);
     }
 }
@@ -246,9 +248,6 @@ int main(int argc, char const *argv[])
             receive_status(sockfd, 221);
 
             close(sockfd);
-
-            // todo: split into functions
-            // todo: verify that status codes are correct
         }
 
         else if (choice==3) {
@@ -261,7 +260,5 @@ int main(int argc, char const *argv[])
         }
     }
 
-
-    
     return 0;
 }
