@@ -55,6 +55,7 @@ int get_choice() {
 
 // gets mail and also check if format is correct
 int get_mail_from_user(char* lines[MAX_LINES+3]) {
+
     for (int i=0; i<MAX_LINES+3; i++) {
         lines[i] = NULL;
     }
@@ -116,7 +117,7 @@ void send_message(int sockfd, char *msg) {
     send(sockfd, buf, strlen(buf), 0);
 }
 
-void receive_status(int sockfd, int expected) {
+int receive_status(int sockfd, int expected) {
     char buf[100];
     bzero(buf, 100);
     recv(sockfd, buf, 100, 0);
@@ -127,10 +128,11 @@ void receive_status(int sockfd, int expected) {
     num_str[3] = '\0';
     int status = atoi(num_str);
     if(status != expected) {
-        printf("In fn: Expected: %d\t Received: %d\n", expected, status);
+        if(status==550) printf("Error in sending mail: %s\n", buf);
         send_message(sockfd, "QUIT");
-        exit(0);
+        return 0;
     }
+    return 1;
 }
 
 int main(int argc, char const *argv[])
@@ -140,7 +142,7 @@ int main(int argc, char const *argv[])
         exit(0);
     }
 
-    char *server_ip = argv[1];
+    const char *server_ip = argv[1];
     int smtp_port = atoi(argv[2]);
     int pop3_port = atoi(argv[3]);
 
@@ -152,6 +154,8 @@ int main(int argc, char const *argv[])
     fgets(username, 100, stdin);
     printf("Enter password: ");
     fgets(password, 100, stdin);
+
+    int ret; // for checking status of commands
 
     while (1) {
         int choice = get_choice();
@@ -178,7 +182,7 @@ int main(int argc, char const *argv[])
             }
             
             // expected: 220
-            receive_status(sockfd, 220);
+            if(!receive_status(sockfd, 220)) continue;
 
             // send HELO 
             strcpy(buf, "HELO ");
@@ -186,7 +190,7 @@ int main(int argc, char const *argv[])
             send_message(sockfd, buf);
 
             // expected: 250 
-            receive_status(sockfd, 250);
+            if(!receive_status(sockfd, 250)) continue;
 
             char *lines[MAX_LINES+3]; // 3 extra for From, To, Subject
             int ret = get_mail_from_user(lines);
@@ -201,7 +205,7 @@ int main(int argc, char const *argv[])
             send_message(sockfd, buf);
 
             // expected: 250 
-            receive_status(sockfd, 250);
+            if(!receive_status(sockfd, 250)) continue;
 
 
             // send RCPT TO
@@ -211,13 +215,13 @@ int main(int argc, char const *argv[])
             send_message(sockfd, buf);
 
             // expected: 250 
-            receive_status(sockfd, 250);
+            if(!receive_status(sockfd, 250)) continue;
 
             // send DATA
             send_message(sockfd, "DATA");
 
             // expected: 354
-            receive_status(sockfd, 354);
+            if(!receive_status(sockfd, 354)) continue;
 
             // send mail
             int i=0; 
@@ -230,7 +234,6 @@ int main(int argc, char const *argv[])
                     strcpy(buf, "Subject: ");
                 else 
                     strcpy(buf, "");
-
                 send_message(sockfd, strcat(buf, lines[i]));
                 i++;
             }
@@ -239,13 +242,13 @@ int main(int argc, char const *argv[])
             send_message(sockfd, ".");
 
             // expected: 250
-            receive_status(sockfd, 250);
+            if(!receive_status(sockfd, 250)) continue;
 
             // send QUIT
             send_message(sockfd, "QUIT");
 
             // expected: 221
-            receive_status(sockfd, 221);
+            if(!receive_status(sockfd, 221)) continue; 
 
             close(sockfd);
         }

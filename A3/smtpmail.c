@@ -14,9 +14,9 @@
 
 int main(int argc, char *argv[])
 {
-	int			sockfd, newsockfd ; /* Socket descriptors */
-	int			clilen;
-	struct sockaddr_in	cli_addr, serv_addr;
+	int sockfd, newsockfd ; 
+	socklen_t clilen;
+	struct sockaddr_in cli_addr, serv_addr;
 
 	char buf[101];		/* We will use this buffer for communication */
 
@@ -30,9 +30,9 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
-	serv_addr.sin_family		= AF_INET;
-	serv_addr.sin_addr.s_addr	= INADDR_ANY;
-	serv_addr.sin_port		= htons(atoi(argv[1]));
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_addr.s_addr = INADDR_ANY;
+	serv_addr.sin_port = htons(atoi(argv[1]));
 
 	if (bind(sockfd, (struct sockaddr *) &serv_addr,
 					sizeof(serv_addr)) < 0) {
@@ -44,10 +44,8 @@ int main(int argc, char *argv[])
 			
 	while (1) {
 
-
 		clilen = sizeof(cli_addr);
-		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr,
-					&clilen) ;
+		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen) ;
 
 		if (newsockfd < 0) {
 			printf("Accept error\n");
@@ -87,8 +85,7 @@ int main(int argc, char *argv[])
                 
                 char temp[20];
                 bzero(temp,20);
-                int i=5;
-                for(i;i<strlen(buf);i++){
+                for(int i=5; i<strlen(buf); i++){
                     if(buf[i]!=' ')
                     temp[i-5]=buf[i];
                 }
@@ -97,8 +94,7 @@ int main(int argc, char *argv[])
                 strcpy(buf, "250 OK Hello ");
                 strcat(buf, temp);
                 strcat(buf, CRLF);
-                printf("temp : %s\n",temp);
-                printf("helo : test %s\n",buf);
+                printf("%s\n",buf);
                 send(newsockfd, buf, strlen(buf), 0);
             }else{
                 printf("Error: HELO not recieved\n");
@@ -115,9 +111,9 @@ int main(int argc, char *argv[])
                 
                 char temp[20];
                 bzero(temp,20);
-                int i=10,fl=0,j=0;
+                int fl=0,j=0;
                 //get domain from < > 
-                for(i;i<strlen(buf);i++){
+                for(int i=10; i<strlen(buf); i++){
                     if(buf[i]=='<'){
                         fl=1;continue;
                     }
@@ -132,7 +128,7 @@ int main(int argc, char *argv[])
                 strcat(buf, temp);
                 strcat(buf, "... Sender ok");
                 strcat(buf, CRLF);
-                printf("mail from : test %s\n",buf);
+                printf("%s\n",buf);
                 send(newsockfd, buf, strlen(buf), 0);
             }else{
                 printf("Error: MAIL FROM not recieved\n");
@@ -155,9 +151,9 @@ int main(int argc, char *argv[])
                 printf("RCPT TO recieved\n");
                 printf("%s\n",buf);
 
-                int i=7,fl=0,j=0;
+                int fl=0,j=0;
                 //get domain from < > 
-                for(i;i<strlen(buf);i++){
+                for(int i=7; i<strlen(buf); i++){
                     if(buf[i]=='<'){
                         fl=1;continue;
                     }
@@ -166,15 +162,15 @@ int main(int argc, char *argv[])
                         username[j++]=buf[i];
                 }
 
-                printf("username : %s\n",username);
 
-                                strcpy(path,"./");
-                                strcat(path,username);
-                                strcat(path,"/mymailbox");
-                                fd=open(path,O_WRONLY|O_APPEND);
+                strcpy(path,"./");
+                strcat(path,username);
+                strcat(path,"/mymailbox");
+                fd=open(path,O_WRONLY|O_APPEND);
+
                 bzero(buf, 100);
                 if(fd==-1){
-                    printf("no usrr\n");
+                    printf("User not found\n");
                     strcpy(buf, "550 No such user");
                     strcat(buf, CRLF);
                     send(newsockfd, buf, strlen(buf), 0);
@@ -243,8 +239,7 @@ int main(int argc, char *argv[])
                                 bzero(temp,100);
                             }else if(line==2){
                                 //get username from "TO: username@domain"
-                                int i=4;
-                                for(i;i<strlen(temp);i++){
+                                for(int i=4; i<strlen(temp); i++){
                                     if(temp[i]=='@'){break;}
                                     if(temp[i]!=' ')
                                     username[i-4]=temp[i];
@@ -272,8 +267,6 @@ int main(int argc, char *argv[])
                                 write(fd,temp,strlen(temp));
                                 temp_index=0;
                                 bzero(temp,100);
-
-
                                 printf("Mail recieved\n");
                                 bzero(buf, 100); 
                                 strcpy(buf, "250 OK Message accepted for delivery");
@@ -298,8 +291,7 @@ int main(int argc, char *argv[])
                                 bzero(temp,100);
                             }else if(line==2){
                                 //get username from "TO: username@domain"
-                                int i=4;
-                                for(i;i<strlen(temp);i++){
+                                for(int i=4; i<strlen(temp); i++){
                                     if(temp[i]=='@'){break;}
                                     if(temp[i]!=' ')
                                     username[i-4]=temp[i];
@@ -350,8 +342,6 @@ int main(int argc, char *argv[])
             //recieve QUIT from client
             bzero(buf,100);
             recv(newsockfd, buf, 100, 0);
-
-            printf("%s\n",buf);
 
             if(strcmp(buf,"QUIT\r\n")==0){
                 printf("QUIT recieved\n");
