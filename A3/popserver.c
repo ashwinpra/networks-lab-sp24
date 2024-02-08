@@ -21,6 +21,7 @@ int authenticate(int client_socket,char * username){
             // Respond with goodbye message and exit loop
             char quit_message[] = "+OK Goodbye\r\n";
             send(client_socket, quit_message, strlen(quit_message), 0);
+            
             return 0;
         } else if (strncmp(buffer, "USER ",5) == 0) {
             //extract username from buffer string: USER username
@@ -199,6 +200,23 @@ void handle_client(int client_socket) {
             char quit_message[] = "+OK Goodbye\r\n";
             send(client_socket, quit_message, strlen(quit_message), 0);
             quit_executed=1;
+
+            if(number_of_deleted){
+                FILE *fp = fopen(path, "w");
+                for(int i=0;i<n;i++) {
+                    if(!deleted[i]) {
+                        fprintf(fp,"%s",messages[i]);
+                    }
+                }
+                fclose(fp);
+            }
+
+            for(int i=0;i<n;i++) {
+                free(messages[i]);
+            }
+            free(messages);
+
+            
             break;
         } else if (strcmp(buffer, "STAT\r\n") == 0) {
             char stat_response[100];
