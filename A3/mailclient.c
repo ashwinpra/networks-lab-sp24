@@ -109,7 +109,7 @@ int main(int argc, char const *argv[])
 
             // expected: +OK <num_mails> <total_size>
             if(strncmp(stat_resp, "+OK", 3) != 0) {
-                printf("Error in managing mail: %s\n", stat_resp);
+                printf("%s\n", stat_resp);
                 send_message(sockfd, "QUIT\r\n");
                 continue;
             }
@@ -467,7 +467,7 @@ void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1
             if(line==1){
                 // expected: +OK
                 if(strncmp(temp, "+OK", 3) != 0) {
-                    printf("Error in managing mail: %s\n", temp);
+                    printf("%s\n", temp);
                     send_message(sockfd, "QUIT\r\n");
                     return;
                 }

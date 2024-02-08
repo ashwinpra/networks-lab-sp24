@@ -221,7 +221,7 @@ void handle_client(int newsockfd) {
                     for(int i=0;i<n;i++) {
                         if(!deleted[i]) {
                             char list_response[100];
-                            sprintf(list_response,"%d %d\r\n",i+1,strlen(messages[i]));
+                            sprintf(list_response,"%d %d\r\n",i+1,(int)strlen(messages[i]));
                             send(newsockfd, list_response, strlen(list_response), 0);
                         }
                     }
@@ -245,7 +245,7 @@ void handle_client(int newsockfd) {
                     send(newsockfd, err_message, strlen(err_message), 0);
                 }else{
                     char list_response[100];
-                    sprintf(list_response,"+OK %d %d\r\n",msg_number,strlen(messages[msg_number-1]));
+                    sprintf(list_response,"+OK %d %d\r\n",msg_number,(int)strlen(messages[msg_number-1]));
                     send(newsockfd, list_response, strlen(list_response), 0);
                 }
             }
@@ -262,7 +262,7 @@ void handle_client(int newsockfd) {
                 send(newsockfd, err_message, strlen(err_message), 0);
             }else {
                 char retr_response[40]; 
-                sprintf(retr_response,"+OK %d octets\r\n",strlen(messages[msg_number]));
+                sprintf(retr_response,"+OK %d octets\r\n",(int)strlen(messages[msg_number]));
                 send(newsockfd, retr_response, strlen(retr_response), 0);
                 send(newsockfd, messages[msg_number], strlen(messages[msg_number]), 0);
                 send(newsockfd, ".\r\n", 3, 0);
@@ -301,7 +301,6 @@ void handle_client(int newsockfd) {
             send(newsockfd, err_message, strlen(err_message), 0);
         } 
     }
-    // The client is now authenticated and can issue commands like LIST, RETR, DELE, etc.
 
     // Close the connection
     close(newsockfd);
