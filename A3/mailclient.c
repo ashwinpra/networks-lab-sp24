@@ -118,6 +118,15 @@ int main(int argc, char const *argv[])
             token = strtok(NULL, " ");
             int num_mails = atoi(token);
 
+            if(num_mails == 0) {
+                printf("No mails in inbox. Exiting...\n");
+                send_message(sockfd, "QUIT");
+                // expected: +OK
+                if(!receive_pop3_status(sockfd)) continue;
+                close(sockfd);
+                continue;
+            }
+
             // get list of mails
             char* mails[MAX_LINES+3];
             get_maillist_from_server(sockfd, num_mails, mails);
@@ -537,7 +546,7 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
                     if(line==1){
                         // expected: +OK
                         if(strncmp(temp, "+OK", 3) != 0) {
-                            printf("Error in managing mail: %s\n", temp);
+                            printf("%s\n", temp);
                             send_message(sockfd, "QUIT\r\n");
                             return;
                         }
