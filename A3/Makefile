@@ -9,6 +9,8 @@ test:
 	./ts 
 
 clean: 
-	rm mc ms ashwin/mymailbox sarika/mymailbox
-	rm tc ts
+	rm mc ms tc ts
+
+empty: 
+	rm ashwin/mymailbox sarika/mymailbox
 	touch ashwin/mymailbox sarika/mymailbox
