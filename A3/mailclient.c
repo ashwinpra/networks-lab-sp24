@@ -30,7 +30,7 @@ void strip(char* s);
 void append_CRLF(char *line);
 int get_choice();
 int get_mail_from_user(char* lines[MAX_LINES+3]);
-void get_mail_from_server(int sockfd, char mail[(MAX_LINES+1)*(MAX_LINE_LEN+1)+1]);
+void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1]);
 void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+4]);
 void send_message(int sockfd, char *msg);
 void receive_message(int sockfd, char *msg);
@@ -102,6 +102,8 @@ int main(int argc, char const *argv[])
             // expected: +OK
             if(!receive_pop3_status(sockfd, "+OK")) continue;
 
+            // locking part is skipped 
+
             // now in TRANSACTION state
 
             // send STAT to get number of mails
@@ -163,7 +165,7 @@ int main(int argc, char const *argv[])
                 // expected: +OK
                 if(!receive_pop3_status(sockfd, "+OK")) continue;
 
-                char mail[(MAX_LINES+1)*(MAX_LINE_LEN+1)+1];
+                char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1];
                 get_mail_from_server(sockfd, mail);
 
                 // print mail
@@ -408,7 +410,7 @@ void receive_message(int sockfd, char *msg) {
     }
 }
 
-void get_mail_from_server(int sockfd, char mail[(MAX_LINES+1)*(MAX_LINE_LEN+1)+1]){
+void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1]){
     bzero(mail, (MAX_LINES+1)*(MAX_LINE_LEN+1)+1);
     char buf[101];
     char temp[100];
@@ -563,7 +565,7 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
 
         // add to mails array
         char mail_num[4];
-        sprintf(mail_num, "%d", i);
+        sprintf(mail_num, "%d", i+1);
         mails[i-1] = malloc(strlen(mail_num)+strlen(sender)+strlen(time)+strlen(subject)+8);
         strcpy(mails[i-1], mail_num);
         strcat(mails[i-1], " <");
