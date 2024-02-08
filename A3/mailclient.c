@@ -135,11 +135,13 @@ int main(int argc, char const *argv[])
 
             while (1) {
                 // print all mails
+                printf("\n-----------------------------------\n");
                 for (int i=0; i<num_mails; i++) {
                     if(mails[i] != NULL && !deleted[i]) {
                         printf("%s\n", mails[i]);
                     }
                 }
+                printf("-----------------------------------\n");
 
                 int mail_choice; 
                 int quit = 0;
@@ -287,7 +289,7 @@ int main(int argc, char const *argv[])
 
             // expected: 221
             if(!receive_smtp_status(sockfd, 221)) continue; 
-
+        
             close(sockfd);
         }
 
