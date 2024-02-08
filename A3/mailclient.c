@@ -76,16 +76,13 @@ int main(int argc, char const *argv[])
                 perror("Unable to connect to server\n");
                 exit(0);
             }
-            
-            printf("Expected: +OK POP3 server ready\n");
+
             // expected: +OK POP3 server ready
             if(!receive_pop3_status(sockfd, "+OK")) continue;
-            printf("Connected to server\n");
 
             // now in AUTHORIZATION state
             
             // send USER 
-            
             strcpy(buf, "USER ");
             strcat(buf, username);
             send_message(sockfd, buf);
@@ -110,6 +107,9 @@ int main(int argc, char const *argv[])
             char stat_resp[1000];
             receive_message(sockfd, stat_resp);
 
+            printf("STAT response: %s\n", stat_resp);
+
+
             // expected: +OK <num_mails> <total_size>
             if(strncmp(stat_resp, "+OK", 3) != 0) {
                 printf("Error in managing mail: %s\n", stat_resp);
@@ -126,6 +126,7 @@ int main(int argc, char const *argv[])
             // query for each of those mails 
             // make an array for storing all mails
             char* mails[MAX_LINES+3];
+            printf("Fetching mails...\n");
             get_maillist_from_server(sockfd, num_mails, mails);
 
             int deleted[num_mails];
@@ -134,13 +135,13 @@ int main(int argc, char const *argv[])
 
             while (1) {
                 // print all mails
-                printf("\n-------------------------------------------------------\n");
+                printf("\n-----------------------------------\n");
                 for (int i=0; i<num_mails; i++) {
                     if(mails[i] != NULL && !deleted[i]) {
                         printf("%s\n", mails[i]);
                     }
                 }
-                printf("-------------------------------------------------------\n");
+                printf("-----------------------------------\n");
 
                 int mail_choice; 
                 int quit = 0;
@@ -150,9 +151,11 @@ int main(int argc, char const *argv[])
                     fgets(choice_str, 10, stdin);
                     mail_choice = atoi(choice_str);
                     if(mail_choice == -1) {
+                        // send QUIT
+                        // todo: check if this is enough
                         send_message(sockfd, "QUIT");
-                        receive_message(sockfd, buf);
-                        printf("[buf] %s\n", buf);
+                        receive_pop3_status(sockfd, "+OK");
+                        close(sockfd);
                         quit = 1;
                         break;
                     }
@@ -195,7 +198,6 @@ int main(int argc, char const *argv[])
                     break;
                 }
             }
-            close(sockfd);
 
         }
         else if (choice==2) {
@@ -287,7 +289,7 @@ int main(int argc, char const *argv[])
 
             // expected: 221
             if(!receive_smtp_status(sockfd, 221)) continue; 
-
+        
             close(sockfd);
         }
 
@@ -425,11 +427,13 @@ void receive_message(int sockfd, char *msg) {
     // receive until CRLF is found
     while(1) {
         recv(sockfd, buf, 100, 0);
+        // printf("[RECV] %s", buf);
         strcat(msg, buf);
         if(buf[strlen(buf)-2] == '\r' && buf[strlen(buf)-1] == '\n') {
             break;
         }
     }
+    // printf("[FULL] %s\n", msg);
 }
 
 void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1]){
@@ -457,36 +461,52 @@ void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1
                     temp[temp_index++]=buf[buf_index++];
                     temp[temp_index++]='\0';
                     line++;
+
+                    if(line==1){
+                        // expected: +OK
+                        if(strncmp(temp, "+OK", 3) != 0) {
+                            printf("Error in managing mail: %s\n", temp);
+                            send_message(sockfd, "QUIT\r\n");
+                            return;
+                        }
+                    }
+                    else if(strcmp(temp,".\r\n")==0){
+                        temp_index=0;
+                        bzero(temp,100);
+                        done=1;
+                        break;
+                    }
+                    if(line!=1) strcat(mail,temp);
+                    temp_index=0;
+                    bzero(temp,100);
                 }
             }
             else if(temp_index!=0 && (buf[buf_index]=='\n') && (temp[temp_index-1]=='\r')){
                     temp[temp_index++]=buf[buf_index++];
                     temp[temp_index++]='\0';
-                    line++;                    
+                    line++;
+                    
+                    if(line==1){
+                        // expected: +OK
+                        if(strncmp(temp, "+OK", 3) != 0) {
+                            printf("Error in managing mail: %s\n", temp);
+                            send_message(sockfd, "QUIT\r\n");
+                            return;
+                        }
+                    }
+                    else if(strcmp(temp,".\r\n")==0){
+                        temp_index=0;
+                        bzero(temp,100);
+                        done=1;
+                        break;
+                    }
+                    if(line!=1) strcat(mail,temp);
+                    temp_index=0;
+                    bzero(temp,100);
             }
             else{
                 temp[temp_index++]=buf[buf_index++];
-                continue;
             }
-
-            if(line==1){
-                // expected: +OK
-                if(strncmp(temp, "+OK", 3) != 0) {
-                    printf("Error in managing mail: %s\n", temp);
-                    send_message(sockfd, "QUIT\r\n");
-                    return;
-                }
-            }
-            else if(strcmp(temp,".\r\n")==0){
-                temp_index=0;
-                bzero(temp,100);
-                done=1;
-                break;
-            }
-            if(line!=1) strcat(mail,temp);
-            temp_index=0;
-            bzero(temp,100);
-
         }
     }
 }
@@ -541,16 +561,19 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
                                 // sender comes after "From: "
                                 strcpy(sender, temp+6);
                                 remove_CRLF(sender);
+                                strip(sender);
                             }
                             else if(line==4){
                                 // subject comes after "Subject: "
                                 strcpy(subject, temp+9);
                                 remove_CRLF(subject);
+                                strip(subject);
                             }
                             else if(line==5){
                                 // time comes after "Received: "
                                 strcpy(time, temp+10);
                                 remove_CRLF(time);
+                                strip(time);
                             }
                             else if(strcmp(temp,".\r\n")==0){
                                 temp_index=0;
@@ -579,16 +602,19 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
                                 // sender comes after "From: "
                                 strcpy(sender, temp+6);
                                 remove_CRLF(sender);
+                                strip(sender);
                             }
                             else if(line==4){
                                 // subject comes after "Subject: "
                                 strcpy(subject, temp+9);
                                 remove_CRLF(subject);
+                                strip(subject);
                             }
                             else if(line==5){
                                 // time comes after "Received: "
                                 strcpy(time, temp+10);
                                 remove_CRLF(time);
+                                strip(time);
                             }
                             else if(strcmp(temp,".\r\n")==0){
                                 temp_index=0;
@@ -601,46 +627,7 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
                     }
                     else{
                         temp[temp_index++]=buf[buf_index++];
-                        continue;
                     }
-                    
-                    temp[temp_index++]=buf[buf_index++];
-                    temp[temp_index++]='\0';
-                    line++;
-                    if(line==1){
-                        // expected: +OK
-                        if(strncmp(temp, "+OK", 3) != 0) {
-                            printf("Error in managing mail: %s\n", temp);
-                            send_message(sockfd, "QUIT\r\n");
-                            return;
-                        }
-                    }
-                    if(line==2){
-                        // sender comes after "From: "
-                        strcpy(sender, temp+6);
-                        remove_CRLF(sender);
-                        strip(sender);
-                    }
-                    else if(line==4){
-                        // subject comes after "Subject: "
-                        strcpy(subject, temp+9);
-                        remove_CRLF(subject);
-                        strip(subject);
-                    }
-                    else if(line==5){
-                        // time comes after "Received: "
-                        strcpy(time, temp+10);
-                        remove_CRLF(time);
-                        strip(time);
-                    }
-                    else if(strcmp(temp,".\r\n")==0){
-                        temp_index=0;
-                        bzero(temp,100);
-                        done=1;
-                        break;
-                    }
-                    temp_index=0;
-                    bzero(temp,100);
                 }
             }
 
