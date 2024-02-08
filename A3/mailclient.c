@@ -5,11 +5,6 @@
     Ashwin Prasanth 21CS30009
 */
 
-// todo: 
-// ! check if get_mail* functions are working properly 
-// ! check if final . is getting handled properly 
-// ! server-client sync
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -112,6 +107,8 @@ int main(int argc, char const *argv[])
             char stat_resp[1000];
             receive_message(sockfd, stat_resp);
 
+            printf("STAT response: %s\n", stat_resp);
+
 
             // expected: +OK <num_mails> <total_size>
             if(strncmp(stat_resp, "+OK", 3) != 0) {
@@ -124,6 +121,8 @@ int main(int argc, char const *argv[])
             token = strtok(NULL, " ");
             int num_mails = atoi(token);
 
+            printf("Number of mails: %d\n", num_mails);
+
             // query for each of those mails 
             // make an array for storing all mails
             char* mails[MAX_LINES+3];
@@ -132,6 +131,7 @@ int main(int argc, char const *argv[])
 
             int deleted[num_mails];
             memset(deleted, 0, sizeof(deleted));
+            int curr_num_mails = num_mails;
 
             while (1) {
                 // print all mails
@@ -142,15 +142,19 @@ int main(int argc, char const *argv[])
                 }
 
                 int mail_choice; 
+                int quit = 0;
                 while(1) {
                     printf("Enter mail number to view (-1 to go back): ");
-                    scanf("%d", &mail_choice);
+                    char choice_str[10];
+                    fgets(choice_str, 10, stdin);
+                    mail_choice = atoi(choice_str);
                     if(mail_choice == -1) {
                         // send QUIT
                         // todo: check if this is enough
                         send_message(sockfd, "QUIT");
                         receive_pop3_status(sockfd, "+OK");
                         close(sockfd);
+                        quit = 1;
                         break;
                     }
                     if(mail_choice < 1 || mail_choice > num_mails) {
@@ -160,30 +164,34 @@ int main(int argc, char const *argv[])
                     break;
                 }
 
+                if(quit) break;
+
                 // send RETR
                 sprintf(buf, "RETR %d", mail_choice);
                 send_message(sockfd, buf);
-
-                printf("sent RETR\n");
 
                 char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1];
                 get_mail_from_server(sockfd, mail);
 
                 // print mail
-                printf("%s\n", mail);
+                printf("\n%s\n", mail);
 
-                char del_choice = getchar();
+                fflush(stdin);
+                char del_choice = getchar();    
                 if(del_choice == 'd') {
                     // send DELE
                     sprintf(buf, "DELE %d", mail_choice);
                     send_message(sockfd, buf);
-
                     // expected: +OK
                     if(!receive_pop3_status(sockfd, "+OK")) continue;
 
                     deleted[mail_choice-1] = 1;
+                    curr_num_mails--;
                 }
-
+                if (curr_num_mails==0) {
+                    printf("No mails in inbox. Exiting...\n");
+                    break;
+                }
             }
 
         }
@@ -330,6 +338,7 @@ void remove_CRLF(char *line) {
 }
 
 int get_choice() {
+    fflush(stdin);
     char choice_str[10];
     printf("\nMail Client\n");
     printf("-----------\n");
@@ -423,20 +432,20 @@ void receive_message(int sockfd, char *msg) {
 }
 
 void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1]){
-    bzero(mail, (MAX_LINES+1)*(MAX_LINE_LEN+1)+1);
+    bzero(mail, (MAX_LINES+3)*(MAX_LINE_LEN+1)+1);
     char buf[101];
     char temp[100];
     bzero(buf, 101);
 
+    int line=0;
     bzero(temp,100);
     int temp_index=0,buf_index=0,done=0;
     while(!done){
         bzero(buf, 100);
-       
+        
         int n = recv(sockfd, buf, 100, 0);
         if(n>=100) buf[n]='\0';
-        int line=0;
-       
+        
         buf_index=0;
         while(buf_index<n){
             if(buf[buf_index]=='\r'){
@@ -456,15 +465,13 @@ void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1
                             return;
                         }
                     }
-                    
-                    if(strcmp(temp,".\r\n")==0){
+                    else if(strcmp(temp,".\r\n")==0){
                         temp_index=0;
                         bzero(temp,100);
                         done=1;
                         break;
                     }
-
-                    strcat(mail, temp);
+                    if(line!=1) strcat(mail,temp);
                     temp_index=0;
                     bzero(temp,100);
                 }
@@ -472,15 +479,23 @@ void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1
             else if(temp_index!=0 && (buf[buf_index]=='\n') && (temp[temp_index-1]=='\r')){
                     temp[temp_index++]=buf[buf_index++];
                     temp[temp_index++]='\0';
+                    line++;
                     
-                    if(strcmp(temp,".\r\n")==0){
+                    if(line==1){
+                        // expected: +OK
+                        if(strncmp(temp, "+OK", 3) != 0) {
+                            printf("Error in managing mail: %s\n", temp);
+                            send_message(sockfd, "QUIT\r\n");
+                            return;
+                        }
+                    }
+                    else if(strcmp(temp,".\r\n")==0){
                         temp_index=0;
                         bzero(temp,100);
                         done=1;
                         break;
                     }
-
-                    strcat(mail, temp);
+                    if(line!=1) strcat(mail,temp);
                     temp_index=0;
                     bzero(temp,100);
             }
@@ -567,6 +582,14 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
                             temp[temp_index++]='\0';
                             line++;
                             
+                            if(line==1){
+                                // expected: +OK
+                                if(strncmp(temp, "+OK", 3) != 0) {
+                                    printf("Error in managing mail: %s\n", temp);
+                                    send_message(sockfd, "QUIT\r\n");
+                                    return;
+                                }
+                            }
                             if(line==2){
                                 // sender comes after "From: "
                                 strcpy(sender, temp+6);

@@ -6,8 +6,6 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 
-#define PORT 110 // Default POP3 port
-
 void remove_CRLF(char *line) {
     for(int i=0; i<strlen(line); i++) {
         if(line[i] == '\r' && line[i+1] == '\n') {
@@ -147,13 +145,7 @@ void handle_client(int client_socket) {
     // Authentication loop
     ////////////////////////////////////////////
     char username[100];
-    if(!authenticate(client_socket,username)) {
-        send(client_socket, auth_failure, strlen(auth_failure), 0);
-        close(client_socket);
-        return;
-    } else {
-        send(client_socket, auth_success, strlen(auth_success), 0);
-    }
+    authenticate(client_socket, username);
 
 
     char path[100];
@@ -315,7 +307,7 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    printf("POP3 server listening on port %d\n", PORT);
+    printf("POP3 server listening on port %d\n", pop3_port);
 
     while (1) {
         // Accept incoming connection
