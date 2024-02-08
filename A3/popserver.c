@@ -169,15 +169,11 @@ void handle_client(int client_socket) {
         return;
     }
 
-   
-
-
     //make a list of messages present in the mailbox
     int n = 0,total_size = 0;
-    char ** messages;
-    
-    
-     char line[100],msg[5000];
+    char ** messages = NULL;
+        
+    char line[100],msg[5000];
     while(fgets(line,sizeof(line),fp)){
         if(strcmp(line,".\r\n") == 0) {
             messages=realloc(messages,(n+1)*sizeof(char *));
@@ -191,13 +187,11 @@ void handle_client(int client_socket) {
         }
     }
 
-
     int number_of_deleted=0,deleted_size=0,deleted[n];
+    memset(deleted,0,sizeof(deleted));
     int quit_executed=0;
-    
 
-    // TRANSACTION state loop (not implemented in this example)
-
+    // TRANSACTION loop
 
     while (1) {
         memset(buffer, 0, sizeof(buffer));

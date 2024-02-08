@@ -112,6 +112,7 @@ int main(int argc, char const *argv[])
             char stat_resp[1000];
             receive_message(sockfd, stat_resp);
 
+
             // expected: +OK <num_mails> <total_size>
             if(strncmp(stat_resp, "+OK", 3) != 0) {
                 printf("Error in managing mail: %s\n", stat_resp);
@@ -126,12 +127,11 @@ int main(int argc, char const *argv[])
             // query for each of those mails 
             // make an array for storing all mails
             char* mails[MAX_LINES+3];
+            printf("Fetching mails...\n");
             get_maillist_from_server(sockfd, num_mails, mails);
 
             int deleted[num_mails];
-            for(int i=0; i<num_mails; i++) {
-                deleted[i] = 0;
-            }
+            memset(deleted, 0, sizeof(deleted));
 
             while (1) {
                 // print all mails
@@ -157,14 +157,14 @@ int main(int argc, char const *argv[])
                         printf("Mail no. out of range, give again\n");
                         continue;
                     }
+                    break;
                 }
 
                 // send RETR
                 sprintf(buf, "RETR %d", mail_choice);
                 send_message(sockfd, buf);
 
-                // expected: +OK
-                if(!receive_pop3_status(sockfd, "+OK")) continue;
+                printf("sent RETR\n");
 
                 char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1];
                 get_mail_from_server(sockfd, mail);
@@ -413,11 +413,13 @@ void receive_message(int sockfd, char *msg) {
     // receive until CRLF is found
     while(1) {
         recv(sockfd, buf, 100, 0);
+        // printf("[RECV] %s", buf);
         strcat(msg, buf);
         if(buf[strlen(buf)-2] == '\r' && buf[strlen(buf)-1] == '\n') {
             break;
         }
     }
+    // printf("[FULL] %s\n", msg);
 }
 
 void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1]){
@@ -433,6 +435,7 @@ void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1
        
         int n = recv(sockfd, buf, 100, 0);
         if(n>=100) buf[n]='\0';
+        int line=0;
        
         buf_index=0;
         while(buf_index<n){
@@ -443,6 +446,16 @@ void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1
                     temp[temp_index++]=buf[buf_index++];
                     temp[temp_index++]=buf[buf_index++];
                     temp[temp_index++]='\0';
+                    line++;
+
+                    if(line==1){
+                        // expected: +OK
+                        if(strncmp(temp, "+OK", 3) != 0) {
+                            printf("Error in managing mail: %s\n", temp);
+                            send_message(sockfd, "QUIT\r\n");
+                            return;
+                        }
+                    }
                     
                     if(strcmp(temp,".\r\n")==0){
                         temp_index=0;
@@ -491,9 +504,6 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
         sprintf(buf, "RETR %d", i);
         send_message(sockfd, buf);
 
-        // expected: +OK
-        if(!receive_pop3_status(sockfd, "+OK")) continue;
-
         char sender[100], time[100], subject[100];
 
         // server will send line-by-line until .CRLF
@@ -518,18 +528,26 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
                             temp[temp_index++]=buf[buf_index++];
                             temp[temp_index++]='\0';
                             line++;
-                            
+
                             if(line==1){
+                                // expected: +OK
+                                if(strncmp(temp, "+OK", 3) != 0) {
+                                    printf("Error in managing mail: %s\n", temp);
+                                    send_message(sockfd, "QUIT\r\n");
+                                    return;
+                                }
+                            }
+                            if(line==2){
                                 // sender comes after "From: "
                                 strcpy(sender, temp+6);
                                 remove_CRLF(sender);
                             }
-                            else if(line==3){
+                            else if(line==4){
                                 // subject comes after "Subject: "
                                 strcpy(subject, temp+9);
                                 remove_CRLF(subject);
                             }
-                            else if(line==4){
+                            else if(line==5){
                                 // time comes after "Received: "
                                 strcpy(time, temp+10);
                                 remove_CRLF(time);
@@ -549,17 +567,17 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
                             temp[temp_index++]='\0';
                             line++;
                             
-                            if(line==1){
+                            if(line==2){
                                 // sender comes after "From: "
                                 strcpy(sender, temp+6);
                                 remove_CRLF(sender);
                             }
-                            else if(line==3){
+                            else if(line==4){
                                 // subject comes after "Subject: "
                                 strcpy(subject, temp+9);
                                 remove_CRLF(subject);
                             }
-                            else if(line==4){
+                            else if(line==5){
                                 // time comes after "Received: "
                                 strcpy(time, temp+10);
                                 remove_CRLF(time);
