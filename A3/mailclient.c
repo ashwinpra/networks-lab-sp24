@@ -28,6 +28,7 @@
 
 void strip(char* s);
 void append_CRLF(char *line);
+void remove_CRLF(char *line);
 int get_choice();
 int get_mail_from_user(char* lines[MAX_LINES+3]);
 void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1]);
@@ -125,7 +126,7 @@ int main(int argc, char const *argv[])
             // query for each of those mails 
             // make an array for storing all mails
             char* mails[MAX_LINES+3];
-            get_mails_from_server(sockfd, num_mails, mails);
+            get_maillist_from_server(sockfd, num_mails, mails);
 
             int deleted[num_mails];
             for(int i=0; i<num_mails; i++) {
@@ -314,6 +315,15 @@ void append_CRLF(char *line) {
             line[i] = '\r';
             line[i+1] = '\n';
             line[i+2] = '\0';
+            break;
+        }
+    }
+}
+
+void remove_CRLF(char *line) {
+    for(int i=0; i<strlen(line); i++) {
+        if(line[i] == '\r' && line[i+1] == '\n') {
+            line[i] = '\0';
             break;
         }
     }
@@ -512,14 +522,17 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
                             if(line==1){
                                 // sender comes after "From: "
                                 strcpy(sender, temp+6);
+                                remove_CRLF(sender);
                             }
                             else if(line==3){
                                 // subject comes after "Subject: "
                                 strcpy(subject, temp+9);
+                                remove_CRLF(subject);
                             }
                             else if(line==4){
                                 // time comes after "Received: "
                                 strcpy(time, temp+10);
+                                remove_CRLF(time);
                             }
                             else if(strcmp(temp,".\r\n")==0){
                                 temp_index=0;
@@ -539,14 +552,17 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
                             if(line==1){
                                 // sender comes after "From: "
                                 strcpy(sender, temp+6);
+                                remove_CRLF(sender);
                             }
                             else if(line==3){
                                 // subject comes after "Subject: "
                                 strcpy(subject, temp+9);
+                                remove_CRLF(subject);
                             }
                             else if(line==4){
                                 // time comes after "Received: "
                                 strcpy(time, temp+10);
+                                remove_CRLF(time);
                             }
                             else if(strcmp(temp,".\r\n")==0){
                                 temp_index=0;
@@ -565,16 +581,15 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
 
         // add to mails array
         char mail_num[4];
-        sprintf(mail_num, "%d", i+1);
-        mails[i-1] = malloc(strlen(mail_num)+strlen(sender)+strlen(time)+strlen(subject)+8);
+        sprintf(mail_num, "%d", i);
+        mails[i-1] = malloc(strlen(mail_num)+strlen(sender)+strlen(time)+strlen(subject)+6);
         strcpy(mails[i-1], mail_num);
         strcat(mails[i-1], " <");
         strcat(mails[i-1], sender);
         strcat(mails[i-1], "> ");
         strcat(mails[i-1], time);
-        strcat(mails[i-1], " <");
+        strcat(mails[i-1], " ");
         strcat(mails[i-1], subject);
-        strcat(mails[i-1], ">");
         }
     }
 
