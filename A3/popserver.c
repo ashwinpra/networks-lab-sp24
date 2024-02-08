@@ -8,6 +8,16 @@
 
 #define PORT 110 // Default POP3 port
 
+void remove_CRLF(char *line) {
+    for(int i=0; i<strlen(line); i++) {
+        if(line[i] == '\r' && line[i+1] == '\n') {
+            line[i] = '\0';
+            break;
+        }
+    }
+}
+
+
 
 int authenticate(int client_socket,char * username){
 
@@ -52,6 +62,7 @@ int authenticate(int client_socket,char * username){
             char *token;
             while(fgets(line, 100, fp) != NULL) {
                 token = strtok(line, " ");
+                remove_CRLF(token);
                 if(strcmp(token, username) == 0) {
                     user_exists = 1;
                     break;
@@ -89,7 +100,7 @@ int authenticate(int client_socket,char * username){
 
                 //check if password is correct
 
-                *token = strtok(NULL, " ");
+                token = strtok(NULL, " ");
                 for(j=0;j<strlen(token);j++) {
                     if(token[j] == '\n' || token[j]=='\r') {token[j] = '\0';break;}
                 }
@@ -216,7 +227,7 @@ void handle_client(int client_socket) {
             }
             free(messages);
 
-            
+
             break;
         } else if (strcmp(buffer, "STAT\r\n") == 0) {
             char stat_response[100];
@@ -321,8 +332,6 @@ int main(int argc, char *argv[]) {
             perror("Acceptance failed");
             exit(EXIT_FAILURE);
         }
-
-        printf("Connection accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
 
         // Handle client request
         handle_client(client_socket);
