@@ -287,7 +287,7 @@ int main(int argc, char const *argv[])
 
             // expected: 221
             if(!receive_smtp_status(sockfd, 221)) continue; 
-        
+
             close(sockfd);
         }
 

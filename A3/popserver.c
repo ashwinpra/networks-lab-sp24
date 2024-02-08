@@ -6,20 +6,7 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 
-<<<<<<< HEAD
 int authenticate(int newsockfd, char * username){
-=======
-void remove_CRLF(char *line) {
-    for(int i=0; i<strlen(line); i++) {
-        if(line[i] == '\r' && line[i+1] == '\n') {
-            line[i] = '\0';
-            break;
-        }
-    }
-}
-
-int authenticate(int client_socket,char * username){
->>>>>>> parent of c266304 (merged + minor changes in pop3)
 
     while (1) {
         char buffer[1024];
@@ -62,7 +49,6 @@ int authenticate(int client_socket,char * username){
             char *token;
             while(fgets(line, 100, fp) != NULL) {
                 token = strtok(line, " ");
-                remove_CRLF(token);
                 if(strcmp(token, username) == 0) {
                     user_exists = 1;
                     break;
@@ -193,10 +179,6 @@ void handle_client(int newsockfd) {
 
         // Check if the client issued the QUIT command
         if (strcmp(buffer, "QUIT\r\n") == 0) {
-<<<<<<< HEAD
-=======
-            printf("QUIT received");
->>>>>>> parent of c266304 (merged + minor changes in pop3)
             // Respond with goodbye message and exit loop
             char quit_message[] = "+OK Goodbye\r\n";
             send(newsockfd, quit_message, strlen(quit_message), 0);
