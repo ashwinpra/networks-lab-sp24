@@ -6,15 +6,6 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 
-void remove_CRLF(char *line) {
-    for(int i=0; i<strlen(line); i++) {
-        if(line[i] == '\r' && line[i+1] == '\n') {
-            line[i] = '\0';
-            break;
-        }
-    }
-}
-
 int authenticate(int client_socket,char * username){
 
     while (1) {
@@ -58,7 +49,6 @@ int authenticate(int client_socket,char * username){
             char *token;
             while(fgets(line, 100, fp) != NULL) {
                 token = strtok(line, " ");
-                remove_CRLF(token);
                 if(strcmp(token, username) == 0) {
                     user_exists = 1;
                     break;
@@ -139,9 +129,6 @@ void handle_client(int client_socket) {
     send(client_socket, welcome_message, strlen(welcome_message), 0);
 
 
-    //////////////////////////////////////////
-    // Authentication loop
-    ////////////////////////////////////////////
     char username[100];
     authenticate(client_socket, username);
 
@@ -189,14 +176,13 @@ void handle_client(int client_socket) {
 
         // Check if the client issued the QUIT command
         if (strcmp(buffer, "QUIT\r\n") == 0) {
-            printf("QUIT received");
+            printf("QUIT command received\n");
             // Respond with goodbye message and exit loop
             char quit_message[] = "+OK Goodbye\r\n";
             send(client_socket, quit_message, strlen(quit_message), 0);
             quit_executed=1;
 
             if(number_of_deleted){
-                printf("mails were deleted");
                 FILE *fp = fopen(path, "w");
                 for(int i=0;i<n;i++) {
                     if(!deleted[i]) {
@@ -211,7 +197,6 @@ void handle_client(int client_socket) {
                 free(messages[i]);
             }
             free(messages);
-
             break;
         } else if (strcmp(buffer, "STAT\r\n") == 0) {
             char stat_response[100];
@@ -311,7 +296,6 @@ void handle_client(int client_socket) {
             send(client_socket, err_message, strlen(err_message), 0);
         } 
     }
-    // The client is now authenticated and can issue commands like LIST, RETR, DELE, etc.
 
     // Close the connection
     close(client_socket);
