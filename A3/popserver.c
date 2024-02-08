@@ -17,8 +17,6 @@ void remove_CRLF(char *line) {
     }
 }
 
-
-
 int authenticate(int client_socket,char * username){
 
     while (1) {
@@ -38,7 +36,7 @@ int authenticate(int client_socket,char * username){
             bzero(username, 100);
             int i = 5,j=0;
             while(buffer[i] != '\r') {
-                if(buffer[i]!=' ') username[j++] = buffer[i];
+                if(buffer[i]!=' ' && buffer[i]!='\n') username[j++] = buffer[i];
                 i++;
             }
 

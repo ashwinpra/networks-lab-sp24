@@ -1,7 +1,7 @@
 run: 
 	gcc mailclient.c -o mc 
 	gcc smtpmail.c -o ms
-	./ms 2500
+	gcc popserver.c -o ps
 
 test: 
 	gcc testcli.c -o tc
