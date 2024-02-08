@@ -250,7 +250,6 @@ int main(int argc, char *argv[])
                                 write(fd,temp,strlen(temp));
                                 temp_index=0;
                                 bzero(temp,100);
-
                             }
                             else if(line==3){
                                 write(fd,temp,strlen(temp));
