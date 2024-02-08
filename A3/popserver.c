@@ -6,7 +6,20 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 
+<<<<<<< HEAD
 int authenticate(int newsockfd, char * username){
+=======
+void remove_CRLF(char *line) {
+    for(int i=0; i<strlen(line); i++) {
+        if(line[i] == '\r' && line[i+1] == '\n') {
+            line[i] = '\0';
+            break;
+        }
+    }
+}
+
+int authenticate(int client_socket,char * username){
+>>>>>>> parent of c266304 (merged + minor changes in pop3)
 
     while (1) {
         char buffer[1024];
@@ -49,6 +62,7 @@ int authenticate(int newsockfd, char * username){
             char *token;
             while(fgets(line, 100, fp) != NULL) {
                 token = strtok(line, " ");
+                remove_CRLF(token);
                 if(strcmp(token, username) == 0) {
                     user_exists = 1;
                     break;
@@ -129,6 +143,9 @@ void handle_client(int newsockfd) {
     send(newsockfd, welcome_message, strlen(welcome_message), 0);
 
 
+    //////////////////////////////////////////
+    // Authentication loop
+    ////////////////////////////////////////////
     char username[100];
     authenticate(newsockfd, username);
 
@@ -176,12 +193,17 @@ void handle_client(int newsockfd) {
 
         // Check if the client issued the QUIT command
         if (strcmp(buffer, "QUIT\r\n") == 0) {
+<<<<<<< HEAD
+=======
+            printf("QUIT received");
+>>>>>>> parent of c266304 (merged + minor changes in pop3)
             // Respond with goodbye message and exit loop
             char quit_message[] = "+OK Goodbye\r\n";
             send(newsockfd, quit_message, strlen(quit_message), 0);
             quit_executed=1;
 
             if(number_of_deleted){
+                printf("mails were deleted");
                 FILE *fp = fopen(path, "w");
                 for(int i=0;i<n;i++) {
                     if(!deleted[i]) {
@@ -196,6 +218,7 @@ void handle_client(int newsockfd) {
                 free(messages[i]);
             }
             free(messages);
+
             break;
         } else if (strcmp(buffer, "STAT\r\n") == 0) {
             char stat_response[100];
@@ -295,6 +318,7 @@ void handle_client(int newsockfd) {
             send(newsockfd, err_message, strlen(err_message), 0);
         } 
     }
+    // The client is now authenticated and can issue commands like LIST, RETR, DELE, etc.
 
     // Close the connection
     close(newsockfd);

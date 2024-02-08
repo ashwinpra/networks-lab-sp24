@@ -121,14 +121,7 @@ int main(int argc, char const *argv[])
             token = strtok(NULL, " ");
             int num_mails = atoi(token);
 
-            if(num_mails==0){
-                printf("No mails in inbox. Exiting...\n");
-                send_message(sockfd, "QUIT");
-                // expected: +OK
-                if(!receive_pop3_status(sockfd, "+OK")) continue;
-                close(sockfd);
-                continue;
-            }
+            printf("Number of mails: %d\n", num_mails);
 
             // query for each of those mails 
             // make an array for storing all mails
@@ -374,6 +367,7 @@ int get_mail_from_user(char* lines[MAX_LINES+3]) {
         fgets(line, MAX_LINE_LEN, stdin);
         // strip extra spaces in between and newline at the end
         strip(line);
+
         if(n==0 || n==1 || n==2) {
             char *token = strtok(line, " ");
             if ( (n==0 && strcmp(token, "From:") != 0) || 
@@ -531,10 +525,79 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
                             temp[temp_index++]=buf[buf_index++];
                         }else{
                             temp[temp_index++]=buf[buf_index++];
+                            temp[temp_index++]=buf[buf_index++];
+                            temp[temp_index++]='\0';
+                            line++;
+
+                            if(line==1){
+                                // expected: +OK
+                                if(strncmp(temp, "+OK", 3) != 0) {
+                                    printf("Error in managing mail: %s\n", temp);
+                                    send_message(sockfd, "QUIT\r\n");
+                                    return;
+                                }
+                            }
+                            if(line==2){
+                                // sender comes after "From: "
+                                strcpy(sender, temp+6);
+                                remove_CRLF(sender);
+                            }
+                            else if(line==4){
+                                // subject comes after "Subject: "
+                                strcpy(subject, temp+9);
+                                remove_CRLF(subject);
+                            }
+                            else if(line==5){
+                                // time comes after "Received: "
+                                strcpy(time, temp+10);
+                                remove_CRLF(time);
+                            }
+                            else if(strcmp(temp,".\r\n")==0){
+                                temp_index=0;
+                                bzero(temp,100);
+                                done=1;
+                                break;
+                            }
+                            temp_index=0;
+                            bzero(temp,100);
                         }
                     }
                     else if(temp_index!=0 && (buf[buf_index]=='\n') && (temp[temp_index-1]=='\r')){
-
+                            temp[temp_index++]=buf[buf_index++];
+                            temp[temp_index++]='\0';
+                            line++;
+                            
+                            if(line==1){
+                                // expected: +OK
+                                if(strncmp(temp, "+OK", 3) != 0) {
+                                    printf("Error in managing mail: %s\n", temp);
+                                    send_message(sockfd, "QUIT\r\n");
+                                    return;
+                                }
+                            }
+                            if(line==2){
+                                // sender comes after "From: "
+                                strcpy(sender, temp+6);
+                                remove_CRLF(sender);
+                            }
+                            else if(line==4){
+                                // subject comes after "Subject: "
+                                strcpy(subject, temp+9);
+                                remove_CRLF(subject);
+                            }
+                            else if(line==5){
+                                // time comes after "Received: "
+                                strcpy(time, temp+10);
+                                remove_CRLF(time);
+                            }
+                            else if(strcmp(temp,".\r\n")==0){
+                                temp_index=0;
+                                bzero(temp,100);
+                                done=1;
+                                break;
+                            }
+                            temp_index=0;
+                            bzero(temp,100);
                     }
                     else{
                         temp[temp_index++]=buf[buf_index++];
@@ -586,11 +649,11 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
         sprintf(mail_num, "%d", i);
         mails[i-1] = malloc(strlen(mail_num)+strlen(sender)+strlen(time)+strlen(subject)+6);
         strcpy(mails[i-1], mail_num);
-        strcat(mails[i-1], "\t<");
+        strcat(mails[i-1], " <");
         strcat(mails[i-1], sender);
-        strcat(mails[i-1], ">\t");
+        strcat(mails[i-1], "> ");
         strcat(mails[i-1], time);
-        strcat(mails[i-1], "\t");
+        strcat(mails[i-1], " ");
         strcat(mails[i-1], subject);
         }
     }
