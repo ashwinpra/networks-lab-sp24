@@ -6,18 +6,18 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 
-int authenticate(int client_socket,char * username){
+int authenticate(int newsockfd, char * username){
 
     while (1) {
         char buffer[1024];
         memset(buffer, 0, sizeof(buffer));
-        recv(client_socket, buffer, sizeof(buffer), 0);
+        recv(newsockfd, buffer, sizeof(buffer), 0);
 
         // Check if the client issued the QUIT command
         if (strcmp(buffer, "QUIT\r\n") == 0) {
             // Respond with goodbye message and exit loop
             char quit_message[] = "+OK Goodbye\r\n";
-            send(client_socket, quit_message, strlen(quit_message), 0);
+            send(newsockfd, quit_message, strlen(quit_message), 0);
             
             return 0;
         } else if (strncmp(buffer, "USER ",5) == 0) {
@@ -31,7 +31,7 @@ int authenticate(int client_socket,char * username){
 
             if(j==0) {
                 char err_message[] = "-ERR Username cannot be empty\r\n";
-                send(client_socket, err_message, strlen(err_message), 0);
+                send(newsockfd, err_message, strlen(err_message), 0);
                 continue;
             } 
 
@@ -40,7 +40,7 @@ int authenticate(int client_socket,char * username){
             FILE *fp = fopen("user.txt", "r");
             if(fp == NULL) {
                 char err_message[] = "-ERR User file not found\r\n";
-                send(client_socket, err_message, strlen(err_message), 0);
+                send(newsockfd, err_message, strlen(err_message), 0);
                 continue;
             }
 
@@ -57,16 +57,16 @@ int authenticate(int client_socket,char * username){
 
             if(!user_exists){
                 char err_message[] = "-ERR User does not exist\r\n";
-                send(client_socket, err_message, strlen(err_message), 0);
+                send(newsockfd, err_message, strlen(err_message), 0);
                 return 0;
             }
 
             char success_message[] = "+OK User exists\r\n";
-            send(client_socket, success_message, strlen(success_message), 0);
+            send(newsockfd, success_message, strlen(success_message), 0);
 
             //GET PASSWORD
             memset(buffer, 0, sizeof(buffer));
-            recv(client_socket, buffer, sizeof(buffer), 0);
+            recv(newsockfd, buffer, sizeof(buffer), 0);
 
             if (strncmp(buffer, "PASS ",5) == 0) {
                 //extract password from buffer string: PASS password
@@ -80,7 +80,7 @@ int authenticate(int client_socket,char * username){
 
                 if(j==0) {
                     char err_message[] = "-ERR Password cannot be empty\r\n";
-                    send(client_socket, err_message, strlen(err_message), 0);
+                    send(newsockfd, err_message, strlen(err_message), 0);
                     continue;
                 } 
 
@@ -92,45 +92,45 @@ int authenticate(int client_socket,char * username){
                 }
                 if(strcmp(token, password) == 0) {
                     char success_message[] = "+OK Authentication successful\r\n";
-                    send(client_socket, success_message, strlen(success_message), 0);
+                    send(newsockfd, success_message, strlen(success_message), 0);
                     return 1;
                 } else {
                     char err_message[] = "-ERR Authentication failed\r\n";
-                    send(client_socket, err_message, strlen(err_message), 0);
+                    send(newsockfd, err_message, strlen(err_message), 0);
                     return 0;
                 }
 
             } else {
                 // Respond with error message for unrecognized commands during authentication
                 char err_message[] = "-ERR Command not recognized during authentication\r\n";
-                send(client_socket, err_message, strlen(err_message), 0);
+                send(newsockfd, err_message, strlen(err_message), 0);
             }
             
             
         } else if (strcmp(buffer, "PASS\r\n") == 0) {
             //send username first
             char err_message[] = "-ERR Username not provided\r\n";
-            send(client_socket, err_message, strlen(err_message), 0);
+            send(newsockfd, err_message, strlen(err_message), 0);
         } else {
             // Respond with error message for unrecognized commands during authentication
             char err_message[] = "-ERR Command not recognized during authentication\r\n";
-            send(client_socket, err_message, strlen(err_message), 0);
+            send(newsockfd, err_message, strlen(err_message), 0);
         }
     }
 
 }
 
 // Function to handle client requests
-void handle_client(int client_socket) {
+void handle_client(int newsockfd) {
     char buffer[1024];
 
     // Send welcome message
     char welcome_message[] = "+OK POP3 server ready\r\n";
-    send(client_socket, welcome_message, strlen(welcome_message), 0);
+    send(newsockfd, welcome_message, strlen(welcome_message), 0);
 
 
     char username[100];
-    authenticate(client_socket, username);
+    authenticate(newsockfd, username);
 
 
     char path[100];
@@ -141,8 +141,8 @@ void handle_client(int client_socket) {
 
     if(fp == NULL) {
         char err_message[] = "-ERR Mailbox not found\r\n";
-        send(client_socket, err_message, strlen(err_message), 0);
-        close(client_socket);
+        send(newsockfd, err_message, strlen(err_message), 0);
+        close(newsockfd);
         return;
     }
 
@@ -172,14 +172,13 @@ void handle_client(int client_socket) {
 
     while (1) {
         memset(buffer, 0, sizeof(buffer));
-        recv(client_socket, buffer, sizeof(buffer), 0);
+        recv(newsockfd, buffer, sizeof(buffer), 0);
 
         // Check if the client issued the QUIT command
         if (strcmp(buffer, "QUIT\r\n") == 0) {
-            printf("QUIT command received\n");
             // Respond with goodbye message and exit loop
             char quit_message[] = "+OK Goodbye\r\n";
-            send(client_socket, quit_message, strlen(quit_message), 0);
+            send(newsockfd, quit_message, strlen(quit_message), 0);
             quit_executed=1;
 
             if(number_of_deleted){
@@ -201,7 +200,7 @@ void handle_client(int client_socket) {
         } else if (strcmp(buffer, "STAT\r\n") == 0) {
             char stat_response[100];
             sprintf(stat_response,"+OK %d %d\r\n",n-number_of_deleted,total_size-deleted_size);
-            send(client_socket, stat_response, strlen(stat_response), 0);
+            send(newsockfd, stat_response, strlen(stat_response), 0);
         } else if (strncmp(buffer,"LIST ",5)==0) {
 
             int index=5;
@@ -212,36 +211,36 @@ void handle_client(int client_socket) {
                 if(buffer[index]!='0'){
                     char list_response[100];
                     sprintf(list_response,"+OK %d messages (%d octets)\r\n",n-number_of_deleted,total_size-deleted_size);
-                    send(client_socket, list_response, strlen(list_response), 0);
+                    send(newsockfd, list_response, strlen(list_response), 0);
                     for(int i=0;i<n;i++) {
                         if(!deleted[i]) {
                             char list_response[100];
                             sprintf(list_response,"%d %d\r\n",i+1,strlen(messages[i]));
-                            send(client_socket, list_response, strlen(list_response), 0);
+                            send(newsockfd, list_response, strlen(list_response), 0);
                         }
                     }
-                    send(client_socket, ".\r\n", 3, 0);
+                    send(newsockfd, ".\r\n", 3, 0);
 
                 }else{
                     char err_message[] = "-ERR No such message\r\n";
-                    send(client_socket, err_message, strlen(err_message), 0);
+                    send(newsockfd, err_message, strlen(err_message), 0);
 
                 }
 
 
             }else if(msg_number>n){
                 char err_message[] = "-ERR No such message\r\n";
-                send(client_socket, err_message, strlen(err_message), 0);
+                send(newsockfd, err_message, strlen(err_message), 0);
 
             }else{
                 if(deleted[msg_number-1]){
                     char err_message[40]; 
                     sprintf(err_message,"-ERR Message %d already deleted\r\n",msg_number);
-                    send(client_socket, err_message, strlen(err_message), 0);
+                    send(newsockfd, err_message, strlen(err_message), 0);
                 }else{
                     char list_response[100];
                     sprintf(list_response,"+OK %d %d\r\n",msg_number,strlen(messages[msg_number-1]));
-                    send(client_socket, list_response, strlen(list_response), 0);
+                    send(newsockfd, list_response, strlen(list_response), 0);
                 }
             }
         } else if (strncmp(buffer, "RETR ", 5) == 0) {
@@ -249,18 +248,18 @@ void handle_client(int client_socket) {
             msg_number--;
             if(msg_number>=n || msg_number<0) {
                 char err_message[] = "-ERR No such message\r\n";
-                send(client_socket, err_message, strlen(err_message), 0);
+                send(newsockfd, err_message, strlen(err_message), 0);
             }
             else if(deleted[msg_number]) {
                 char err_message[40]; 
                 sprintf(err_message,"-ERR Message %d already deleted\r\n",msg_number+1);
-                send(client_socket, err_message, strlen(err_message), 0);
+                send(newsockfd, err_message, strlen(err_message), 0);
             }else {
                 char retr_response[40]; 
                 sprintf(retr_response,"+OK %d octets\r\n",strlen(messages[msg_number]));
-                send(client_socket, retr_response, strlen(retr_response), 0);
-                send(client_socket, messages[msg_number], strlen(messages[msg_number]), 0);
-                send(client_socket, ".\r\n", 3, 0);
+                send(newsockfd, retr_response, strlen(retr_response), 0);
+                send(newsockfd, messages[msg_number], strlen(messages[msg_number]), 0);
+                send(newsockfd, ".\r\n", 3, 0);
             }
         } else if (strncmp(buffer, "DELE ", 5) == 0) {
             
@@ -268,19 +267,19 @@ void handle_client(int client_socket) {
             msg_number--;
             if(msg_number>=n || msg_number<0) {
                 char err_message[] = "-ERR No such message\r\n";
-                send(client_socket, err_message, strlen(err_message), 0);
+                send(newsockfd, err_message, strlen(err_message), 0);
             }
             else if(deleted[msg_number]) {
                 char err_message[40]; 
                 sprintf(err_message,"-ERR Message %d already deleted\r\n",msg_number+1);
-                send(client_socket, err_message, strlen(err_message), 0);
+                send(newsockfd, err_message, strlen(err_message), 0);
             }else {
                 deleted[msg_number]=1;
                 number_of_deleted++;
                 deleted_size+=strlen(messages[msg_number]);
                 char dele_response[40]; 
                 sprintf(dele_response,"+OK Message %d deleted\r\n",msg_number+1);
-                send(client_socket, dele_response, strlen(dele_response), 0);
+                send(newsockfd, dele_response, strlen(dele_response), 0);
             } 
         } else if(strcmp(buffer,"RSET\r\n")){
             for(int i=0;i<n;i++) {
@@ -289,16 +288,16 @@ void handle_client(int client_socket) {
             number_of_deleted=0;
             deleted_size=0;
             char rset_response[] = "+OK Reset done\r\n";
-            send(client_socket, rset_response, strlen(rset_response), 0);
+            send(newsockfd, rset_response, strlen(rset_response), 0);
         } else {
             // Respond with error message for unrecognized commands
             char err_message[] = "-ERR Command not recognized\r\n";
-            send(client_socket, err_message, strlen(err_message), 0);
+            send(newsockfd, err_message, strlen(err_message), 0);
         } 
     }
 
     // Close the connection
-    close(client_socket);
+    close(newsockfd);
 }
 
 int main(int argc, char *argv[]) {
@@ -311,13 +310,13 @@ int main(int argc, char *argv[]) {
     int pop3_port = atoi(argv[1]);
 
 
-    int server_socket, client_socket;
+    int sockfd, newsockfd;
     struct sockaddr_in server_address, client_address;
     socklen_t client_address_len = sizeof(client_address);
 
     // Create socket
-    server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_socket < 0) {
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);
     }
@@ -327,13 +326,13 @@ int main(int argc, char *argv[]) {
     server_address.sin_addr.s_addr = INADDR_ANY;
     server_address.sin_port = htons(pop3_port);
 
-    if (bind(server_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {
+    if (bind(sockfd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {
         perror("Binding failed");
         exit(EXIT_FAILURE);
     }
 
     // Listen for incoming connections
-    if (listen(server_socket, 5) < 0) {
+    if (listen(sockfd, 5) < 0) {
         perror("Listening failed");
         exit(EXIT_FAILURE);
     }
@@ -342,14 +341,14 @@ int main(int argc, char *argv[]) {
 
     while (1) {
         // Accept incoming connection
-        client_socket = accept(server_socket, (struct sockaddr *)&client_address, &client_address_len);
-        if (client_socket < 0) {
+        newsockfd = accept(sockfd, (struct sockaddr *)&client_address, &client_address_len);
+        if (newsockfd < 0) {
             perror("Acceptance failed");
             exit(EXIT_FAILURE);
         }
 
         // Handle client request
-        handle_client(client_socket);
+        handle_client(newsockfd);
     }
 
 
