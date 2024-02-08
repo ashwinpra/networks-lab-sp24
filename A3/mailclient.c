@@ -176,8 +176,8 @@ int main(int argc, char const *argv[])
                 // print mail
                 printf("\n%s\n", mail);
 
-                fflush(stdin);
-                char del_choice = getchar();    
+                char del_choice = getchar();   
+                fflush(stdin); 
                 if(del_choice == 'd') {
                     // send DELE
                     sprintf(buf, "DELE %d", mail_choice);
@@ -190,6 +190,9 @@ int main(int argc, char const *argv[])
                 }
                 if (curr_num_mails==0) {
                     printf("No mails in inbox. Exiting...\n");
+                    send_message(sockfd, "QUIT");
+                    // expected: +OK
+                    if(!receive_pop3_status(sockfd, "+OK")) continue;
                     break;
                 }
             }
