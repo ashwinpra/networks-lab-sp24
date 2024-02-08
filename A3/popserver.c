@@ -201,6 +201,7 @@ void handle_client(int client_socket) {
                 for(int i=0;i<n;i++) {
                     if(!deleted[i]) {
                         fprintf(fp,"%s",messages[i]);
+                        fprintf(fp,".\r\n");
                     }
                 }
                 fclose(fp);
@@ -211,12 +212,53 @@ void handle_client(int client_socket) {
             }
             free(messages);
 
-
             break;
         } else if (strcmp(buffer, "STAT\r\n") == 0) {
             char stat_response[100];
             sprintf(stat_response,"+OK %d %d\r\n",n-number_of_deleted,total_size-deleted_size);
             send(client_socket, stat_response, strlen(stat_response), 0);
+        } else if (strncmp(buffer,"LIST ",5)==0) {
+
+            int index=5;
+            while(index<strlen(buffer) && buffer[index]==' ') index++;
+
+            int msg_number = atoi(buffer+index);
+            if(msg_number==0){
+                if(buffer[index]!='0'){
+                    char list_response[100];
+                    sprintf(list_response,"+OK %d messages (%d octets)\r\n",n-number_of_deleted,total_size-deleted_size);
+                    send(client_socket, list_response, strlen(list_response), 0);
+                    for(int i=0;i<n;i++) {
+                        if(!deleted[i]) {
+                            char list_response[100];
+                            sprintf(list_response,"%d %d\r\n",i+1,strlen(messages[i]));
+                            send(client_socket, list_response, strlen(list_response), 0);
+                        }
+                    }
+                    send(client_socket, ".\r\n", 3, 0);
+
+                }else{
+                    char err_message[] = "-ERR No such message\r\n";
+                    send(client_socket, err_message, strlen(err_message), 0);
+
+                }
+
+
+            }else if(msg_number>n){
+                char err_message[] = "-ERR No such message\r\n";
+                send(client_socket, err_message, strlen(err_message), 0);
+
+            }else{
+                if(deleted[msg_number-1]){
+                    char err_message[40]; 
+                    sprintf(err_message,"-ERR Message %d already deleted\r\n",msg_number);
+                    send(client_socket, err_message, strlen(err_message), 0);
+                }else{
+                    char list_response[100];
+                    sprintf(list_response,"+OK %d %d\r\n",msg_number,strlen(messages[msg_number-1]));
+                    send(client_socket, list_response, strlen(list_response), 0);
+                }
+            }
         } else if (strncmp(buffer, "RETR ", 5) == 0) {
             int msg_number = atoi(buffer+5);
             msg_number--;
@@ -254,14 +296,20 @@ void handle_client(int client_socket) {
                 char dele_response[40]; 
                 sprintf(dele_response,"+OK Message %d deleted\r\n",msg_number+1);
                 send(client_socket, dele_response, strlen(dele_response), 0);
+            } 
+        } else if(strcmp(buffer,"RSET\r\n")){
+            for(int i=0;i<n;i++) {
+                deleted[i]=0;
             }
-
-            
+            number_of_deleted=0;
+            deleted_size=0;
+            char rset_response[] = "+OK Reset done\r\n";
+            send(client_socket, rset_response, strlen(rset_response), 0);
         } else {
             // Respond with error message for unrecognized commands
             char err_message[] = "-ERR Command not recognized\r\n";
             send(client_socket, err_message, strlen(err_message), 0);
-        }
+        } 
     }
     // The client is now authenticated and can issue commands like LIST, RETR, DELE, etc.
 
