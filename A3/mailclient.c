@@ -143,6 +143,11 @@ int main(int argc, char const *argv[])
                     printf("Enter mail number to view (-1 to go back): ");
                     scanf("%d", &mail_choice);
                     if(mail_choice == -1) {
+                        // send QUIT
+                        // todo: check if this is enough
+                        send_message(sockfd, "QUIT");
+                        receive_pop3_status(sockfd, "+OK");
+                        close(sockfd);
                         break;
                     }
                     if(mail_choice < 1 || mail_choice > num_mails) {
