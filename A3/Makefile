@@ -9,7 +9,7 @@ test:
 	./ts 
 
 clean: 
-	rm mc ms tc ts
+	rm mc ms ps tc ts
 
 empty: 
 	rm ashwin/mymailbox sarika/mymailbox

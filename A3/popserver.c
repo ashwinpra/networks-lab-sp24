@@ -129,12 +129,13 @@ void handle_client(int newsockfd) {
     send(newsockfd, welcome_message, strlen(welcome_message), 0);
 
 
-    //////////////////////////////////////////
-    // Authentication loop
-    ////////////////////////////////////////////
     char username[100];
-    authenticate(newsockfd, username);
+    int ret = authenticate(newsockfd, username);
 
+    if(!ret) {
+        close(newsockfd);
+        return;
+    }
 
     char path[100];
     strcpy(path,"./");
