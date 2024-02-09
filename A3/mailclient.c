@@ -21,17 +21,17 @@
 #define MAX_LINES 50 
 #define CRLF "\r\n"
 
-void strip(char* s);
-void append_CRLF(char *line);
-void remove_CRLF(char *line);
-int get_choice();
-int get_mail_from_user(char* lines[MAX_LINES+3]);
-void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1]);
-void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+4]);
-void send_message(int sockfd, char *msg);
-void receive_message(int sockfd, char *msg);
-int receive_smtp_status(int sockfd, int expected);
-int receive_pop3_status(int sockfd);
+void strip(char* s); // utility function to strip extra spaces
+void append_CRLF(char *line); // utility function to append CRLF to a line
+void remove_CRLF(char *line); // utility function to remove CRLF from a line
+int get_choice(); // to print the menu and prompt for user choice in every loop
+int get_mail_from_user(char* lines[MAX_LINES+3]); // to get mail from user and check if format is correct
+void get_mail_from_server(int sockfd, char mail[(MAX_LINES+3)*(MAX_LINE_LEN+1)+1]); // to get complete mail from server which is requested by user
+void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+4]); // to get the initial list of mails from server
+void send_message(int sockfd, char *msg); // to send a message to server
+void receive_message(int sockfd, char *msg); // to receive a message from server
+int receive_smtp_status(int sockfd, int expected); // to receive status from server and check if it is expected in smtp client
+int receive_pop3_status(int sockfd); // to receive status from server and check if it is expected in pop3 client
 
 
 int main(int argc, char const *argv[])
@@ -530,7 +530,6 @@ void get_maillist_from_server(int sockfd, int num_mails, char* mails[MAX_LINES+3
 
         // server will send line-by-line until .CRLF
         // from it, extract mail in "From: " line, Time of mail, Subject
-        //receive mail from client
             int line=0;
             bzero(temp,100);
             int temp_index=0,buf_index=0,done=0;

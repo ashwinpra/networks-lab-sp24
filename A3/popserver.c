@@ -1,3 +1,10 @@
+/*
+    Networks Lab Assignment 3
+    POP3 Mail Server 
+    Sarika Bishnoi 21CS10058
+    Ashwin Prasanth 21CS30009
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
