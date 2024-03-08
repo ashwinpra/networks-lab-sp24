@@ -58,6 +58,7 @@ int main(int argc, char const *argv[])
             struct sockaddr_in cli_addr;
             int clilen = sizeof(cli_addr);
             sockfds[num_clients] = accept(sockfds[0], (struct sockaddr *)&cli_addr, &clilen);
+            // get the client IP address
             if (sockfds[num_clients] < 0) {
                 perror("Error in accept\n");
                 exit(0);

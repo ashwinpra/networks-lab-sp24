@@ -33,6 +33,11 @@ int main() {
 	   exit(EXIT_FAILURE);
     }
 
+    // connect to server
+    // connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
+
+    // send(sockfd, (const char *)hello, strlen(hello), 0);
+
     sendto(sockfd, (const char *)hello, strlen(hello), 0, 
 			(const struct sockaddr *) &servaddr, sizeof(servaddr)); 
             

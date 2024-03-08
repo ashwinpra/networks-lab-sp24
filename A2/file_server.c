@@ -89,7 +89,7 @@ int main() {
                     }
                 }
                 // writing it to the file
-                write(fd, buf, n);
+                write(fd, buf, n);  
             }
             close(fd);
 
