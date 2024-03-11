@@ -8,11 +8,14 @@
 #include <sys/shm.h>
 
 #define N 25 // max number of active sockets 
+#define T 5 // timeout in seconds
+#define p 0.05 // probability of packet drop (vary it)
 #define SEND_BUFFER_SIZE 10
 #define RECV_BUFFER_SIZE 5
 
 #define SOCK_MTP 120 // random number for SOCK_MTP type
 
+// error numbers
 #define ENOBUFS 501 
 #define ENOTBOUND 502
 #define ENOMSG 503
