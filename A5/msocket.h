@@ -13,6 +13,11 @@
 
 #define SOCK_MTP 120 // random number for SOCK_MTP type
 
+#define ENOBUFS 501 
+#define ENOTBOUND 502
+#define ENOMSG 503
+#define EMISC 504
+
 typedef struct {
     int unack_msgs[SEND_BUFFER_SIZE]; // sequence number of messages sent but not yet acknowledged
     int wndsize;    // window size indicating max number of messages that can be sent without receiving ACK 
@@ -24,7 +29,7 @@ typedef struct {
 } rwnd_t;
 
 typedef struct {
-    int free;  // 0 if its free, 1 if its alloted
+    int free;  // 1 if its free, 0 otherwise
     int pid; // pid of the process that created the socket
     int udpsockfd; // socket descriptor of the underlying UDP socket
     char *ip; // ip address of the other end of the MTP socket
@@ -34,6 +39,8 @@ typedef struct {
     swnd_t swnd; 
     rwnd_t rwnd; 
 } msocket_t;
+
+int errno; // global variable to store error number
 
 int m_socket(int domain, int type, int protocol);
 int m_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
