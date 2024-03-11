@@ -12,9 +12,9 @@
 
 int m_socket(int domain, int type, int protocol)
 {
-    // todo: "type" checking
-
-    int shmid = shmget(IPC_PRIVATE, N*sizeof(msocket_t), 0666 | IPC_CREAT);
+    // todo: get key
+    int key;
+    int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
     
     int freeidx = -1;
@@ -42,11 +42,15 @@ int m_socket(int domain, int type, int protocol)
     }
     msocket[freeidx].swnd.wndsize = SEND_BUFFER_SIZE;
     msocket[freeidx].rwnd.wndsize = RECV_BUFFER_SIZE;
+
+    return freeidx;
 }
 
 int m_close(int sockfd)
 {
-    int shmid = shmget(IPC_PRIVATE, N*sizeof(msocket_t), 0666 | IPC_CREAT);
+    // todo: get key
+    int key;
+    int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
 
     for (int i = 0; i < N; i++)
