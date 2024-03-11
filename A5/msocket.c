@@ -8,6 +8,8 @@
 #include <sys/shm.h>
 #include <msocket.h>
 
+// todo: change IPC_PRIVATE to a key accordingly
+
 int m_socket(int domain, int type, int protocol)
 {
     // todo: "type" checking
