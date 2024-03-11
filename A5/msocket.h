@@ -5,8 +5,35 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/shm.h>
 
 #define N 25 // max number of active sockets 
+#define SEND_BUFFER_SIZE 10
+#define RECV_BUFFER_SIZE 5
+
+#define SOCK_MTP 120 // random number for SOCK_MTP type
+
+typedef struct {
+    int unack_msgs[SEND_BUFFER_SIZE]; // sequence number of messages sent but not yet acknowledged
+    int wndsize;    // window size indicating max number of messages that can be sent without receiving ACK 
+} swnd_t; 
+
+typedef struct {
+    int exp_msgs[RECV_BUFFER_SIZE]; // sequence number of messages expected to be received
+    int wndsize;    // window size indicating max number of messages that can be received based on buffer availability
+} rwnd_t;
+
+typedef struct {
+    int free;  // 0 if its free, 1 if its alloted
+    int pid; // pid of the process that created the socket
+    int udpsockfd; // socket descriptor of the underlying UDP socket
+    char *ip; // ip address of the other end of the MTP socket
+    int port; // port number of the other end of the MTP socket
+    char send_buffer[SEND_BUFFER_SIZE][1024]; 
+    char recv_buffer[RECV_BUFFER_SIZE][1024];
+    swnd_t swnd; 
+    rwnd_t rwnd; 
+} msocket_t;
 
 int m_socket(int domain, int type, int protocol);
 int m_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
