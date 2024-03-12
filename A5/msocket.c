@@ -6,11 +6,26 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <msocket.h>
+#include <sys/sem.h>	
+ 
 
 int m_socket(int domain, int type, int protocol) {
     int key = ftok("msocket.h", 65);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
+
+    key_t key_sockinfo=ftok(".sockinfo", 100);
+    int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
+    SOCK_INFO *sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
+
+    int semid1, semid2 ;
+	struct sembuf pop, vop ;
+
+    key_t key1=ftok(".sem1", 101);
+    key_t key2=ftok(".sem2", 102);
+
+    semid1 = semget(key1, 1, 0777|IPC_CREAT);
+	semid2 = semget(key2, 1, 0777|IPC_CREAT);
     
     int freeidx = -1;
     for (int i = 0; i < N; i++)
@@ -30,11 +45,30 @@ int m_socket(int domain, int type, int protocol) {
 
     SM[freeidx].free = 0;
     SM[freeidx].pid = getpid();
-    if((SM[freeidx].udpsockfd = socket(domain, SOCK_DGRAM, protocol)) == -1)
-    {
-        errno = EMISC;
+
+    /*signals on Sem1 and then waits on Sem2. On being woken, checks sock_id field of SOCK_INFO. If -1, return 
+    error and set errno correctly. If not, put UDP socket id returned in that field in SM table (same as if m_socket called socket()) 
+    and return the index in SM table as usual. In both cases, reset all fields of SOCK_INFO to 0.*/
+
+    V(semid1);
+    P(semid2);
+
+    if(sockinfo->sockid == -1){
+        errno = sockinfo->errno;
+
+        sockinfo->sockid=0;
+        sockinfo->errno=0;
+        sockinfo->port=0;
+        sockinfo->IP="";
         return -1;
     }
+    SM[freeidx].udpsockfd = sockinfo->sockid;
+    
+    sockinfo->sockid=0;
+    sockinfo->errno=0;
+    sockinfo->port=0;
+    sockinfo->IP="";
+
 
     SM[freeidx].swnd.wndsize = SEND_BUFFER_SIZE;
     SM[freeidx].rwnd.wndsize = RECV_BUFFER_SIZE;
@@ -45,22 +79,62 @@ int m_socket(int domain, int type, int protocol) {
 }
 
 int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port) {
+
+    /*Find the corresponding actual UDP socket id from the SM table. 
+    Put the UDP socket ID, IP, and port in SOCK_INFO table. Signal Sem1. 
+    Then wait on Sem2. On being woken, checks sock_id field of SOCK_INFO. 
+    If -1, return error and set errno correctly. If not return success.
+    In both cases, reset all fields of SOCK_INFO to 0.*/
+
+    int semid1, semid2 ;
+	struct sembuf pop, vop ;
+
+    key_t key1=ftok(".sem1", 101);
+    key_t key2=ftok(".sem2", 102);
+
+    semid1 = semget(key1, 1, 0777|IPC_CREAT);
+	semid2 = semget(key2, 1, 0777|IPC_CREAT);
+
+
     int key = ftok("msocket.h", 65);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
-    msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
+    msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
+
+
+    key_t key_sockinfo=ftok(".sockinfo", 100);
+    int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
+    SOCK_INFO *sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
     
     struct sockaddr_in src_addr;
     src_addr.sin_family = AF_INET;
     src_addr.sin_port = htons(src_port);
     src_addr.sin_addr.s_addr = inet_addr(src_ip);
+
+    sockinfo->sockid = SM[sockfd].udpsockfd;
+    sockinfo->port = dest_port;
+    sockinfo->IP = dest_ip;
+
     
-    if(bind(msocket[sockfd].udpsockfd, (struct sockaddr *)&src_addr, sizeof(src_addr)) < 0)
-    {
-        errno = EMISC;
+
+    V(semid1);
+    P(semid2);
+
+
+    if(sockinfo->sockid == -1){
+        errno = sockinfo->errno;
+        sockinfo->IP="";
+        sockinfo->sockid=0;
+        sockinfo->port=0;
+        sockinfo->errno = 0;
         return -1;
     }
-    msocket[sockfd].port= dest_port;
-    msocket[sockfd].ip = dest_ip;
+    
+    sockinfo->IP="";
+    sockinfo->sockid=0;
+    sockinfo->port=0;
+    sockinfo->errno = 0;
+    SM[sockfd].port= dest_port;
+    SM[sockfd].ip = dest_ip;
     return 0;
 }
 
@@ -85,7 +159,7 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
         if(msocket[sockfd].send_buffer[i][0] == NULL){
             sprintf(msocket[sockfd].send_buffer[i], "%s", buf);
             msocket[sockfd].swnd.wndsize --;
-            break;
+            return strlen(buf);
         }
     }
     return 0;

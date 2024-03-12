@@ -21,6 +21,16 @@
 #define ENOMSG 503
 #define EMISC 504
 
+#define P(s) semop(s, &pop, 1)  
+#define V(s) semop(s, &vop, 1)  
+
+typedef struct{
+    int sockid;
+    char * IP;
+    int port;
+    int errno;
+} SOCK_INFO;
+
 typedef struct {
     int unack_msgs[SEND_BUFFER_SIZE]; // sequence number of messages sent but not yet acknowledged
     int wndsize;    // window size indicating max number of messages that can be sent without receiving ACK 

@@ -7,6 +7,10 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <msocket.h>
+#include <sys/select.h>
+#include <sys/sem.h>	
+
+
 
 void *receiver(void *arg) {
     int shmid = (int)arg;
@@ -134,7 +138,35 @@ void *garbage_collector(void *arg) {
 }
 
 int main()
-{
+{   
+    //shared memory
+    key_t key_sockinfo=ftok(".sockinfo", 100);
+    int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
+    SOCK_INFO *sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
+    memset(sockinfo, 0, sizeof(SOCK_INFO));
+
+
+    //semaphores
+    
+    int semid1, semid2 ;
+	struct sembuf pop, vop ;
+
+    key_t key1=ftok(".sem1", 101);
+    key_t key2=ftok(".sem2", 102);
+
+    semid1 = semget(key1, 1, 0777|IPC_CREAT);
+	semid2 = semget(key2, 1, 0777|IPC_CREAT);
+
+    semctl(semid1, 0, SETVAL, 0);
+	semctl(semid2, 0, SETVAL, 0);
+
+    pop.sem_num = vop.sem_num = 0;
+	pop.sem_flg = vop.sem_flg = 0;
+	pop.sem_op = -1 ; vop.sem_op = 1 ;
+
+
+
+    //shared memory
     int key = ftok("msocket.h", 65);
     int shmid = shmget(key, N * sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
@@ -148,6 +180,52 @@ int main()
     pthread_create(&R, &attr, receiver, (void *)shmid);          // to handle receiving messages
     pthread_create(&S, &attr, sender, (void *)shmid);            // to handle sending messages
     pthread_create(&G, &attr, garbage_collector, (void *)shmid); // to handle garbage collection
+
+    while(1){
+
+        //wait on Sem1
+        P(semid1);
+    /*b) On being signaled, look at SOCK_INFO.
+    (c) If all fields are 0, it is a m_socket call. Create a UDP socket. Put the socket id returned in the sock_id field of SOCK_INFO.  If error, put -1 in sock_id field and errno in errno field. Signal on Sem2.
+    (d) if sock_id, IP, and port are non-zero, it is a m_bind call. Make a bind() call on the sock_id value, with the IP and port given. If error, reset sock_id to -1 in the structure and put errno in errno field. Signal on Sem2.
+    (e) Go back to wait on Sem1*/
+
+        //look at SOCK_INFO
+        if(sockinfo->sockid==0 && sockinfo->port==0 && strcmp(sockinfo->IP,"")==0){
+            //m_socket call
+            int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+            if(sockfd == -1){
+                sockinfo->sockid = -1;
+                sockinfo->errno = errno;
+            }
+            else{
+                sockinfo->sockid = sockfd;
+            }
+            V(semid2);
+        }
+        else if(sockinfo->sockid!=0 && sockinfo->port!=0 && strcmp(sockinfo->IP,"")!=0){
+            //m_bind call
+            int sockfd = sockinfo->sockid;
+            struct sockaddr_in src_addr;
+            src_addr.sin_family = AF_INET;
+            src_addr.sin_port = htons(sockinfo->port);
+            inet_aton(sockinfo->IP, &src_addr.sin_addr);
+        
+            int res = bind(sockfd, (struct sockaddr *)&src_addr, sizeof(src_addr));
+            if(res == -1){
+                sockinfo->sockid = -1;
+                sockinfo->errno = errno;
+            }
+            else{
+                sockinfo->sockid = sockfd;
+            }
+            V(semid2);
+
+        }
+    }
+
+
+
 
     pthread_join(R, NULL);
     pthread_join(S, NULL);
