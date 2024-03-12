@@ -56,8 +56,7 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     
     if(bind(msocket[sockfd].udpsockfd, (struct sockaddr *)&src_addr, sizeof(src_addr)) < 0)
     {
-        errno=EMISC;
-        perror("bind failed");
+        errno = EMISC;
         return -1;
     }
     msocket[sockfd].port= dest_port;
@@ -65,7 +64,7 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     return 0;
 }
 
-int m_sendto(int sockfd, char *buf, int len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen) {
+int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen) {
     int key = ftok("msocket.h", 65);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
@@ -94,7 +93,7 @@ int m_sendto(int sockfd, char *buf, int len, int flags, const struct sockaddr *d
 
 
 
-int m_recvfrom(int sockfd, char *buf, int len, int flags, struct sockaddr *src_addr, socklen_t *addrlen){
+int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen){
     int key = ftok("msocket.h", 65);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
@@ -108,10 +107,10 @@ int m_recvfrom(int sockfd, char *buf, int len, int flags, struct sockaddr *src_a
             sprintf(buf, "%s", msocket[sockfd].recv_buffer[i]);
             msocket[sockfd].recv_buffer[i][0] = NULL;
             msocket[sockfd].rwnd.wndsize ++;
-            return 0;
+            return strlen(buf);
         }
     }
-    return strlen(buf);
+    return 0;
 }
 
 int m_close(int sockfd)

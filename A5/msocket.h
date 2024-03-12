@@ -47,9 +47,9 @@ typedef struct {
 int errno; // global variable to store error number
 
 int m_socket(int domain, int type, int protocol);
-int m_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-int m_sendto(int sockfd, const void *buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);
-int m_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen);
+int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port);
+int m_sendto(int sockfd, char* buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);
+int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen);
 int m_close(int sockfd);
 
 #endif
