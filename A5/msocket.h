@@ -41,6 +41,7 @@ typedef struct {
     char recv_buffer[RECV_BUFFER_SIZE][1024];
     swnd_t swnd; 
     rwnd_t rwnd; 
+    int nospace; // 1 if no space in recv_buffer, 0 otherwise
 } msocket_t;
 
 int errno; // global variable to store error number
