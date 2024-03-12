@@ -7,10 +7,8 @@
 #include <sys/shm.h>
 #include <msocket.h>
 
-int m_socket(int domain, int type, int protocol)
-{
-    // todo: get key
-    int key;
+int m_socket(int domain, int type, int protocol) {
+    int key = ftok("msocket.h", 65);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
     
@@ -46,33 +44,9 @@ int m_socket(int domain, int type, int protocol)
     return freeidx;
 }
 
-int m_close(int sockfd)
-{
-    // todo: get key
-    int key;
+int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port) {
+    int key = ftok("msocket.h", 65);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
-    msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
-
-    for (int i = 0; i < N; i++)
-    {
-        if (SM[i].pid == getpid())
-        {
-            SM[i].free = 1;
-            if(close(SM[i].udpsockfd) == -1) {
-                errno = EMISC;
-                return -1;
-            }
-            return 0;
-        }
-    }
-
-    errno = EMISC;
-    return -1;
-}
-
-int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
-{
-    int shmid = shmget(IPC_PRIVATE, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
     
     struct sockaddr_in src_addr;
@@ -91,8 +65,9 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     return 0;
 }
 
-int m_sendto(int sockfd, char *buf, int len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen ){
-    int shmid = shmget(IPC_PRIVATE, N*sizeof(msocket_t), 0666 | IPC_CREAT);
+int m_sendto(int sockfd, char *buf, int len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen) {
+    int key = ftok("msocket.h", 65);
+    int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
     char * dest_port = ntohs(((struct sockaddr_in *)dest_addr)->sin_port);
     char *dest_ip = inet_ntoa(((struct sockaddr_in *)dest_addr)->sin_addr);
@@ -120,7 +95,8 @@ int m_sendto(int sockfd, char *buf, int len, int flags, const struct sockaddr *d
 
 
 int m_recvfrom(int sockfd, char *buf, int len, int flags, struct sockaddr *src_addr, socklen_t *addrlen){
-    int shmid = shmget(IPC_PRIVATE, N*sizeof(msocket_t), 0666 | IPC_CREAT);
+    int key = ftok("msocket.h", 65);
+    int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
     if(msocket[sockfd].rwnd.wndsize == RECV_BUFFER_SIZE){
         errno = ENOMSG;
@@ -138,3 +114,25 @@ int m_recvfrom(int sockfd, char *buf, int len, int flags, struct sockaddr *src_a
     return strlen(buf);
 }
 
+int m_close(int sockfd)
+{
+    int key = ftok("msocket.h", 65);
+    int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
+    msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
+
+    for (int i = 0; i < N; i++)
+    {
+        if (SM[i].pid == getpid())
+        {
+            SM[i].free = 1;
+            if(close(SM[i].udpsockfd) == -1) {
+                errno = EMISC;
+                return -1;
+            }
+            return 0;
+        }
+    }
+
+    errno = EMISC;
+    return -1;
+}

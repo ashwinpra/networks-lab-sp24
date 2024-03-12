@@ -135,7 +135,7 @@ void *garbage_collector(void *arg) {
 
 int main()
 {
-    int key;
+    int key = ftok("msocket.h", 65);
     int shmid = shmget(key, N * sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
     memset(SM, 0, N * sizeof(msocket_t));
