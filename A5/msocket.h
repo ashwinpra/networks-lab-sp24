@@ -45,8 +45,11 @@ typedef struct {
 } swnd_t; 
 
 typedef struct {
-    int exp_msgs[RECV_BUFFER_SIZE]; // sequence number of messages expected to be received
+    packet_t exp_msgs[RECV_BUFFER_SIZE]; // sequence number of messages expected to be received
     int wndsize;    // window size indicating max number of messages that can be received based on buffer availability
+    int window_start;
+    int window_end;
+    int curr_seq_no;
 } rwnd_t;
 
 typedef struct {
@@ -55,7 +58,6 @@ typedef struct {
     int udpsockfd; // socket descriptor of the underlying UDP socket
     char *ip; // ip address of the other end of the MTP socket
     int port; // port number of the other end of the MTP socket
-    char recv_buffer[RECV_BUFFER_SIZE][1024];
     swnd_t swnd; 
     rwnd_t rwnd; 
     int nospace; // 1 if no space in recv_buffer, 0 otherwise

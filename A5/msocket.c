@@ -72,13 +72,19 @@ int m_socket(int domain, int type, int protocol) {
 
     SM[freeidx].swnd.curr_seq_no=1;
     SM[freeidx].swnd.wndsize = SEND_BUFFER_SIZE;
-    SM[freeidx].rwnd.wndsize = RECV_BUFFER_SIZE;
     SM[freeidx].swnd.window_start = 0;
     SM[freeidx].swnd.window_end = 0;
     for(int i=0;i<SEND_BUFFER_SIZE;i++){
         SM[freeidx].swnd.unack_msgs[i].seq_no = -1;
     }
-    memset(SM[freeidx].recv_buffer, NULL, RECV_BUFFER_SIZE*1024);
+
+    SM[freeidx].rwnd.curr_seq_no=1;
+    SM[freeidx].rwnd.wndsize = RECV_BUFFER_SIZE;
+    SM[freeidx].rwnd.window_start = 0;
+    SM[freeidx].rwnd.window_end = 0;
+    for(int i=0;i<RECV_BUFFER_SIZE;i++){
+        SM[freeidx].rwnd.exp_msgs[i].seq_no = -1;
+    }
 
     return freeidx;
 }
@@ -182,9 +188,10 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
     }
     bzero(buf, len);
     for(int i=0;i<RECV_BUFFER_SIZE;i++){
-        if(msocket[sockfd].recv_buffer[i][0] != NULL){
-            sprintf(buf, "%s", msocket[sockfd].recv_buffer[i]);
-            msocket[sockfd].recv_buffer[i][0] = NULL;
+        if(msocket[sockfd].rwnd.exp_msgs[i].seq_no != -1){
+            sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[i].message);
+            msocket[sockfd].rwnd.exp_msgs[i].seq_no = -1;
+            bzero(msocket[sockfd].rwnd.exp_msgs[i].message, 1024);
             msocket[sockfd].rwnd.wndsize ++;
             return strlen(buf);
         }
