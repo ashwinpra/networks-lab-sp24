@@ -83,6 +83,10 @@ void *receiver(void *arg) {
                                 int last_inorder_seq = atoi(strtok(buf, ":"));
                                 int rwnd_size = atoi(strtok(NULL, ":"));
                                 SM[j].swnd.wndsize = rwnd_size;
+                                if(rwnd_size == 0){
+                                    SM[j].nospace = 1;
+                                }
+
                                 for (int k = 0; k < SEND_BUFFER_SIZE; k++)
                                 {
                                     if (SM[j].swnd.unack_msgs[k] <= last_inorder_seq)
@@ -90,7 +94,6 @@ void *receiver(void *arg) {
                                         SM[j].swnd.unack_msgs[k] = -1;
                                     }
                                 }
-
                             }
 
                             else {
