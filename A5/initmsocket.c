@@ -10,6 +10,10 @@
 #include <sys/select.h>
 #include <sys/sem.h>	
 
+SOCK_INFO *sockinfo;
+
+int semid1, semid2;
+struct sembuf pop, vop;
 
 
 void *receiver(void *arg) {
@@ -56,12 +60,13 @@ void *receiver(void *arg) {
                     struct sockaddr_in cliaddr;
                     int len = sizeof(cliaddr);
                     char buf[1024];
-                    int n = recvfrom(SM[i].udpsockfd, buf, 1024, 0, (struct sockaddr *)&cliaddr, &len);
+                    int n = m_recvfrom(SM[i].udpsockfd, buf, 1024, 0, (struct sockaddr *)&cliaddr, &len);
                     if (n == -1)
                     {
                         perror("recvfrom()");
                         exit(1);
                     }
+
                     printf("Received message: %s\n", buf);
                     
                     // add it to recv_buffer of the receiver socket (find by matching ip and port)
@@ -80,7 +85,11 @@ void *receiver(void *arg) {
                             // todo: receive message
                             // todo: remove header, check seq number
 
-                            strcpy(SM[j].recv_buffer[RECV_BUFFER_SIZE-SM[j].rwnd.wndsize], buf); //todo: check
+                            // remove header; message will be of the form "seq:msg"
+                            int seq_num = atoi(strtok(buf, ":"));
+                            char* msg = strtok(NULL, ":");
+
+                            strcpy(SM[j].recv_buffer[RECV_BUFFER_SIZE-SM[j].rwnd.wndsize], msg); //todo: check
                             SM[j].rwnd.wndsize--;
 
                             // send ack
@@ -114,7 +123,8 @@ void *sender(void* arg) {
     checks the current swnd for each of the MTP sockets and determines whether there is a
     pending message from the sender-side message buffer that can be sent. If so, it sends that
     message through the UDP sendto() call for the corresponding UDP socket and updates the
-    send timestamp.
+    send timestamp. Note: add the header to the message before sending it.
+    Header is just the sequence number of the message, separated from the message by a colon.
     */
     while (1)
     {
@@ -158,19 +168,13 @@ void *garbage_collector(void *arg) {
 int main()
 {   
     //shared memory
-    key_t key_sockinfo=ftok(".sockinfo", 100);
+    key_t key_sockinfo=ftok("msocket.h", 100);
     int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
-    SOCK_INFO *sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
+    sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
     memset(sockinfo, 0, sizeof(SOCK_INFO));
 
-
-    //semaphores
-    
-    int semid1, semid2 ;
-	struct sembuf pop, vop ;
-
-    key_t key1=ftok(".sem1", 101);
-    key_t key2=ftok(".sem2", 102);
+    key_t key1=ftok("msocket.h", 101);
+    key_t key2=ftok("msocket.h", 102);
 
     semid1 = semget(key1, 1, 0777|IPC_CREAT);
 	semid2 = semget(key2, 1, 0777|IPC_CREAT);
@@ -185,7 +189,7 @@ int main()
 
 
     //shared memory
-    int key = ftok("msocket.h", 65);
+    int key = ftok("msocket.h", 99);
     int shmid = shmget(key, N * sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
     memset(SM, 0, N * sizeof(msocket_t));
@@ -203,10 +207,10 @@ int main()
 
         //wait on Sem1
         P(semid1);
-    /*b) On being signaled, look at SOCK_INFO.
-    (c) If all fields are 0, it is a m_socket call. Create a UDP socket. Put the socket id returned in the sock_id field of SOCK_INFO.  If error, put -1 in sock_id field and errno in errno field. Signal on Sem2.
-    (d) if sock_id, IP, and port are non-zero, it is a m_bind call. Make a bind() call on the sock_id value, with the IP and port given. If error, reset sock_id to -1 in the structure and put errno in errno field. Signal on Sem2.
-    (e) Go back to wait on Sem1*/
+        /*b) On being signaled, look at SOCK_INFO.
+        (c) If all fields are 0, it is a m_socket call. Create a UDP socket. Put the socket id returned in the sock_id field of SOCK_INFO.  If error, put -1 in sock_id field and errno in errno field. Signal on Sem2.
+        (d) if sock_id, IP, and port are non-zero, it is a m_bind call. Make a bind() call on the sock_id value, with the IP and port given. If error, reset sock_id to -1 in the structure and put errno in errno field. Signal on Sem2.
+        (e) Go back to wait on Sem1*/
 
         //look at SOCK_INFO
         if(sockinfo->sockid==0 && sockinfo->port==0 && strcmp(sockinfo->IP,"")==0){
@@ -238,12 +242,8 @@ int main()
                 sockinfo->sockid = sockfd;
             }
             V(semid2);
-
         }
     }
-
-
-
 
     pthread_join(R, NULL);
     pthread_join(S, NULL);

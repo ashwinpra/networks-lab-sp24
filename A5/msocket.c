@@ -10,19 +10,19 @@
  
 
 int m_socket(int domain, int type, int protocol) {
-    int key = ftok("msocket.h", 65);
+    int key = ftok("msocket.h", 99);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
 
-    key_t key_sockinfo=ftok(".sockinfo", 100);
+    key_t key_sockinfo=ftok("msocket.h", 100);
     int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
     SOCK_INFO *sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
 
     int semid1, semid2 ;
 	struct sembuf pop, vop ;
 
-    key_t key1=ftok(".sem1", 101);
-    key_t key2=ftok(".sem2", 102);
+    key_t key1=ftok("msocket.h", 101);
+    key_t key2=ftok("msocket.h", 102);
 
     semid1 = semget(key1, 1, 0777|IPC_CREAT);
 	semid2 = semget(key2, 1, 0777|IPC_CREAT);
@@ -62,13 +62,13 @@ int m_socket(int domain, int type, int protocol) {
         sockinfo->IP="";
         return -1;
     }
+
     SM[freeidx].udpsockfd = sockinfo->sockid;
     
     sockinfo->sockid=0;
     sockinfo->errno=0;
     sockinfo->port=0;
     sockinfo->IP="";
-
 
     SM[freeidx].swnd.wndsize = SEND_BUFFER_SIZE;
     SM[freeidx].rwnd.wndsize = RECV_BUFFER_SIZE;
@@ -91,19 +91,19 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     int semid1, semid2 ;
 	struct sembuf pop, vop ;
 
-    key_t key1=ftok(".sem1", 101);
-    key_t key2=ftok(".sem2", 102);
+    key_t key1=ftok("msocket.h", 101);
+    key_t key2=ftok("msocket.h", 102);
 
     semid1 = semget(key1, 1, 0777|IPC_CREAT);
 	semid2 = semget(key2, 1, 0777|IPC_CREAT);
 
 
-    int key = ftok("msocket.h", 65);
+    int key = ftok("msocket.h", 99);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
 
 
-    key_t key_sockinfo=ftok(".sockinfo", 100);
+    key_t key_sockinfo=ftok("msocket.h", 100);
     int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
     SOCK_INFO *sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
     
@@ -115,8 +115,6 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     sockinfo->sockid = SM[sockfd].udpsockfd;
     sockinfo->port = dest_port;
     sockinfo->IP = dest_ip;
-
-    
 
     V(semid1);
     P(semid2);
@@ -141,7 +139,7 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
 }
 
 int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen) {
-    int key = ftok("msocket.h", 65);
+    int key = ftok("msocket.h", 99);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
     char * dest_port = ntohs(((struct sockaddr_in *)dest_addr)->sin_port);
@@ -170,7 +168,7 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
 
 
 int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen){
-    int key = ftok("msocket.h", 65);
+    int key = ftok("msocket.h", 99);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
     if(msocket[sockfd].rwnd.wndsize == RECV_BUFFER_SIZE){
@@ -191,7 +189,7 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
 
 int m_close(int sockfd)
 {
-    int key = ftok("msocket.h", 65);
+    int key = ftok("msocket.h", 99);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
 
