@@ -60,11 +60,11 @@ void *receiver(void *arg) {
                     struct sockaddr_in cliaddr;
                     int len = sizeof(cliaddr);
                     char buf[1024];
-                    int n = m_recvfrom(SM[i].udpsockfd, buf, 1024, 0, (struct sockaddr *)&cliaddr, &len);
+                    int n = recvfrom(SM[i].udpsockfd, buf, 1024, 0, (struct sockaddr *)&cliaddr, &len);
                     if (n == -1)
                     {
                         perror("recvfrom()");
-                        exit(1);
+                        pthread_exit(NULL);
                     }
 
                     printf("Received message: %s\n", buf);
@@ -74,28 +74,38 @@ void *receiver(void *arg) {
                     {
                         if (SM[j].free == 0 && SM[j].port == ntohs(cliaddr.sin_port) && strcmp(SM[j].ip, inet_ntoa(cliaddr.sin_addr)) == 0)
                         {
-                            // handle separately if its ack 
-                            if(strcmp(buf, "ACK") == 0) {
-                                // todo: handle
-                                /*
-                                If the received message is an ACK message in response to a previously sent message, it updates the swnd and removes the message from the sender-side message buffer for the corresponding MTP socket. If the received message is a duplicate ACK message, it just updates the swnd size.
-                                */
+                            // if its a normal message, it's of the form "seq:msg"
+                            // if its an ACK, it's of the form "<last_inorder_seq>:<rwnd_size>:ACK"
+
+                            // handle separately if its ack
+                            if (strcmp(buf + n - 3, "ACK") == 0)
+                            {
+                                int last_inorder_seq = atoi(strtok(buf, ":"));
+                                int rwnd_size = atoi(strtok(NULL, ":"));
+                                SM[j].swnd.wndsize = rwnd_size;
+                                for (int k = 0; k < SEND_BUFFER_SIZE; k++)
+                                {
+                                    if (SM[j].swnd.unack_msgs[k] <= last_inorder_seq)
+                                    {
+                                        SM[j].swnd.unack_msgs[k] = -1;
+                                    }
+                                }
+
                             }
-                            
-                            // todo: receive message
-                            // todo: remove header, check seq number
 
-                            // remove header; message will be of the form "seq:msg"
-                            int seq_num = atoi(strtok(buf, ":"));
-                            char* msg = strtok(NULL, ":");
+                            else {
+                                // remove header; message will be of the form "seq:msg"
+                                int seq_num = atoi(strtok(buf, ":"));
+                                char* msg = strtok(NULL, ":");
 
-                            strcpy(SM[j].recv_buffer[RECV_BUFFER_SIZE-SM[j].rwnd.wndsize], msg); //todo: check
-                            SM[j].rwnd.wndsize--;
+                                strcpy(SM[j].recv_buffer[RECV_BUFFER_SIZE-SM[j].rwnd.wndsize], msg); //todo: check
+                                SM[j].rwnd.wndsize--;
 
-                            // send ack
-                            sendto(SM[j].udpsockfd, "ACK", 3, 0, (struct sockaddr *)&cliaddr, len);
+                                // send ack
+                                sendto(SM[j].udpsockfd, "ACK", 3, 0, (struct sockaddr *)&cliaddr, len);
 
-                            break;
+                                break;
+                            }   
                         }
                     }
                 }
@@ -109,6 +119,7 @@ void *receiver(void *arg) {
         }
     }
 }
+
 
 void *sender(void* arg) {
 

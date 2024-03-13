@@ -52,7 +52,7 @@ typedef struct {
     int curr_seq_no;
 } rwnd_t;
 
-typedef struct {
+typedef struct _msocket_t{
     int free;  // 1 if its free, 0 otherwise
     int pid; // pid of the process that created the socket
     int udpsockfd; // socket descriptor of the underlying UDP socket

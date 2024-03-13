@@ -193,6 +193,12 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
             msocket[sockfd].rwnd.exp_msgs[i].seq_no = -1;
             bzero(msocket[sockfd].rwnd.exp_msgs[i].message, 1024);
             msocket[sockfd].rwnd.wndsize ++;
+
+            struct sockaddr_in *src = (struct sockaddr_in *)src_addr;
+            src->sin_family = AF_INET;
+            src->sin_port = htons(msocket[sockfd].port);
+            src->sin_addr.s_addr = inet_addr(msocket[sockfd].ip);
+            *addrlen = sizeof(*src);
             return strlen(buf);
         }
     }
