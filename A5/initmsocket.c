@@ -83,17 +83,26 @@ void *receiver(void *arg) {
                                 int last_inorder_seq = atoi(strtok(buf, ":"));
                                 int rwnd_size = atoi(strtok(NULL, ":"));
                                 SM[j].swnd.wndsize = rwnd_size;
-                                if(rwnd_size == 0){
-                                    SM[j].nospace = 1;
+
+                                for (int k = SM[j].swnd.window_start; k < SM[j].swnd.window_end; k++)
+                                {
+                                    if (SM[j].swnd.unack_msgs[k].seq_no == last_inorder_seq)
+                                    {   
+                                        // it's a cumulative ack, so shift window 
+                                        for(int l = SM[j].swnd.window_start; l <= k; l++)
+                                        {
+                                            SM[j].swnd.unack_msgs[l].seq_no = -1;
+                                            bzero(SM[j].swnd.unack_msgs[l].message, 1024);
+                                        }
+                                        SM[j].swnd.window_start = k + 1;
+                                        SM[j].swnd.window_end = k + 1 + SM[j].swnd.wndsize < (SEND_BUFFER_SIZE-1) ? k + 1 + SM[j].swnd.wndsize : SEND_BUFFER_SIZE-1;
+                                        break;
+                                    }
+
+                                    // todo: handle out-of-order / duplicate ACKs
                                 }
 
-                                for (int k = 0; k < SEND_BUFFER_SIZE; k++)
-                                {
-                                    if (SM[j].swnd.unack_msgs[k] <= last_inorder_seq)
-                                    {
-                                        SM[j].swnd.unack_msgs[k] = -1;
-                                    }
-                                }
+                                break;
                             }
 
                             else {
@@ -101,11 +110,33 @@ void *receiver(void *arg) {
                                 int seq_num = atoi(strtok(buf, ":"));
                                 char* msg = strtok(NULL, ":");
 
-                                strcpy(SM[j].recv_buffer[RECV_BUFFER_SIZE-SM[j].rwnd.wndsize], msg); //todo: check
-                                SM[j].rwnd.wndsize--;
+                                int last_inorder_seq = SM[j].rwnd.curr_seq_no - 1; //todo: check
 
-                                // send ack
-                                sendto(SM[j].udpsockfd, "ACK", 3, 0, (struct sockaddr *)&cliaddr, len);
+                                for(int k=SM[j].rwnd.window_start; k<SM[j].rwnd.window_end; k++)
+                                {
+                                    if(SM[j].rwnd.exp_msgs[k].seq_no == seq_num) {
+                                        // this message was expected
+                                        strcpy(SM[j].rwnd.exp_msgs[k].message, msg);
+                                        // check if it was inorder 
+                                        // todo: check if correct
+                                        if(seq_num == last_inorder_seq + 1)
+                                        {
+                                            last_inorder_seq++;
+                                            SM[j].rwnd.curr_seq_no++;
+                                            SM[j].rwnd.window_start++;
+                                            SM[j].rwnd.window_end++;
+                                            SM[j].rwnd.window_end = SM[j].rwnd.window_end < RECV_BUFFER_SIZE ? SM[j].rwnd.window_end : RECV_BUFFER_SIZE;
+                                            SM[j].rwnd.wndsize--;
+                                            if(SM[j].rwnd.wndsize == 0) { SM[j].nospace = 1; }
+                                        }
+                                    }
+                                }
+
+                                // send ACK in proper format: "<last_inorder_seq>:<rwnd_size>:ACK"
+                                char ack[1024];
+                                sprintf(ack, "%d:%d:ACK", last_inorder_seq, SM[j].rwnd.wndsize);
+
+                                sendto(SM[j].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
 
                                 break;
                             }   
@@ -118,7 +149,17 @@ void *receiver(void *arg) {
         else
         {
             printf("No data within %d seconds.\n", T);
-            // todo: see if any of the 'nospace's are updated
+            // see if any of the 'nospace's can be updated
+            for(int i=0; i<N; i++)
+            {
+                if(SM[i].free == 0 && SM[i].nospace == 1)
+                {
+                    if(SM[i].rwnd.wndsize > 0)
+                    {
+                        SM[i].nospace = 0;
+                    }
+                }
+            }
         }
     }
 }

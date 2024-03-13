@@ -71,11 +71,11 @@ int m_socket(int domain, int type, int protocol) {
     sockinfo->IP="";
 
     SM[freeidx].swnd.curr_seq_no=1;
-    SM[freeidx].swnd.wndsize = SEND_BUFFER_SIZE;
+    SM[freeidx].swnd.wndsize = RECV_BUFFER_SIZE;
     SM[freeidx].swnd.window_start = 0;
     SM[freeidx].swnd.window_end = 0;
     for(int i=0;i<SEND_BUFFER_SIZE;i++){
-        SM[freeidx].swnd.unack_msgs[i].seq_no = -1;
+        SM[freeidx].swnd.unack_msgs[i].seq_no = i+1;
     }
 
     SM[freeidx].rwnd.curr_seq_no=1;
@@ -83,7 +83,7 @@ int m_socket(int domain, int type, int protocol) {
     SM[freeidx].rwnd.window_start = 0;
     SM[freeidx].rwnd.window_end = 0;
     for(int i=0;i<RECV_BUFFER_SIZE;i++){
-        SM[freeidx].rwnd.exp_msgs[i].seq_no = -1;
+        SM[freeidx].rwnd.exp_msgs[i].seq_no = i+1;
     }
 
     return freeidx;

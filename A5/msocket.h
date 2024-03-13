@@ -31,7 +31,7 @@ typedef struct{
     int errno;
 } SOCK_INFO;
 
-typedef struct{
+typedef struct{ 
     int seq_no;
     char message[1024];
 } packet_t;
@@ -49,7 +49,7 @@ typedef struct {
     int wndsize;    // window size indicating max number of messages that can be received based on buffer availability
     int window_start;
     int window_end;
-    int curr_seq_no;
+    int curr_seq_no; 
 } rwnd_t;
 
 typedef struct _msocket_t{
