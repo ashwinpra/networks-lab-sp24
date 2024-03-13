@@ -41,6 +41,7 @@ typedef struct {
     int wndsize;    // window size indicating max number of messages that can be sent without receiving ACK 
     int window_start;
     int window_end;
+    int curr_seq_no;
 } swnd_t; 
 
 typedef struct {
