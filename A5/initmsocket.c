@@ -106,8 +106,8 @@ void *sender(void* arg) {
     int shmid = (int)arg;
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
     /*
-    The thread S behaves in the following manner. It sleeps for some time ( < T/2 ), and wakes
-    up periodically. On waking up, it first checks whether the message timeout period (T) is over
+    The thread S behaves in the following manner. It sleeps for some time ( < T/2 ), and wakes up periodically.
+    On waking up, it first checks whether the message timeout period (T) is over
     (by computing the time difference between the current time and the time when the messages
     within the window were sent last) for the messages sent over any of the active MTP sockets.
     If yes, it retransmits all the messages within the current swnd for that MTP socket. It then
@@ -120,13 +120,31 @@ void *sender(void* arg) {
     {
         // sleep for some time
         sleep(T/2);
+
+        /*On waking up, it first checks whether the message timeout period (T) is over
+    (by computing the time difference between the current time and the time when the messages
+    within the window were sent last) for the messages sent over any of the active MTP sockets.*/
         for(int i=0; i<N; i++)
         {
             if(SM[i].free == 0)
             {
-                
+                for(int j=0; j<SEND_BUFFER_SIZE; j++)
+                {
+                    if(SM[i].send_buffer[j].free == 0)
+                    {
+                        time_t now;
+                        time(&now);
+                        if(difftime(now, SM[i].send_buffer[j].timestamp) > T)
+                        {
+                            // retransmit
+                            sendto(SM[i].udpsockfd, SM[i].send_buffer[j].message, strlen(SM[i].send_buffer[j].message), 0, (struct sockaddr *)&SM[i].dest_addr, sizeof(SM[i].dest_addr));
+                            SM[i].send_buffer[j].timestamp = now;
+                        }
+                    }
+                }
             }
         }
+
     }
 }
 

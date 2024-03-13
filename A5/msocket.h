@@ -31,9 +31,16 @@ typedef struct{
     int errno;
 } SOCK_INFO;
 
+typedef struct{
+    int seq_no;
+    char message[1024];
+} packet_t;
+
 typedef struct {
-    int unack_msgs[SEND_BUFFER_SIZE]; // sequence number of messages sent but not yet acknowledged
+    packet_t unack_msgs[SEND_BUFFER_SIZE]; // sequence number of messages sent but not yet acknowledged
     int wndsize;    // window size indicating max number of messages that can be sent without receiving ACK 
+    int window_start;
+    int window_end;
 } swnd_t; 
 
 typedef struct {
@@ -47,7 +54,6 @@ typedef struct {
     int udpsockfd; // socket descriptor of the underlying UDP socket
     char *ip; // ip address of the other end of the MTP socket
     int port; // port number of the other end of the MTP socket
-    char send_buffer[SEND_BUFFER_SIZE][1024]; 
     char recv_buffer[RECV_BUFFER_SIZE][1024];
     swnd_t swnd; 
     rwnd_t rwnd; 

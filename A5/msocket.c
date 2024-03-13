@@ -72,6 +72,8 @@ int m_socket(int domain, int type, int protocol) {
 
     SM[freeidx].swnd.wndsize = SEND_BUFFER_SIZE;
     SM[freeidx].rwnd.wndsize = RECV_BUFFER_SIZE;
+    SM[freeidx].swnd.window_start = 0;
+    SM[freeidx].swnd.window_end = 0;
     memset(SM[freeidx].send_buffer, NULL, SEND_BUFFER_SIZE*1024);
     memset(SM[freeidx].recv_buffer, NULL, RECV_BUFFER_SIZE*1024);
 
