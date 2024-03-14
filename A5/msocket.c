@@ -76,16 +76,17 @@ int m_socket(int domain, int type, int protocol) {
     SM[freeidx].swnd.window_start = 0;
     SM[freeidx].swnd.window_end = 0;
     for(int i=0;i<SEND_BUFFER_SIZE;i++){
-        SM[freeidx].swnd.unack_msgs[i].seq_no = i+1;
+        SM[freeidx].swnd.unack_msgs[i].seq_no = -1;
     }
 
     SM[freeidx].rwnd.curr_seq_no=1;
     SM[freeidx].rwnd.wndsize = RECV_BUFFER_SIZE;
     SM[freeidx].rwnd.window_start = 0;
-    SM[freeidx].rwnd.window_end = 0;
+    SM[freeidx].rwnd.window_end = RECV_BUFFER_SIZE-1;
     for(int i=0;i<RECV_BUFFER_SIZE;i++){
         SM[freeidx].rwnd.exp_msgs[i].seq_no = i+1;
     }
+    SM[freeidx].rwnd.curr_seq_no = 6; // next sequence number to be added to window
 
     return freeidx;
 }
@@ -171,7 +172,7 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
             sprintf(msocket[sockfd].swnd.unack_msgs[index].message, "%d:%s", msocket[sockfd].swnd.curr_seq_no, buf);
             msocket[sockfd].swnd.unack_msgs[index].seq_no = msocket[sockfd].swnd.curr_seq_no;
             msocket[sockfd].swnd.curr_seq_no++;
-            msocket[sockfd].swnd.wndsize --;
+            msocket[sockfd].swnd.wndsize--;
             return strlen(buf);
         }
     }
@@ -194,7 +195,7 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
             sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[i].message);
             msocket[sockfd].rwnd.exp_msgs[i].seq_no = -1;
             bzero(msocket[sockfd].rwnd.exp_msgs[i].message, 1024);
-            msocket[sockfd].rwnd.wndsize ++;
+            msocket[sockfd].rwnd.wndsize++;
 
             struct sockaddr_in *src = (struct sockaddr_in *)src_addr;
             src->sin_family = AF_INET;
