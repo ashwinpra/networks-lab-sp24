@@ -6,7 +6,8 @@
 
 // this will run on port 8081, and talk to user 1 on port 8080
 int main(int argc, char const *argv[])
-{
+{   
+    printf("My pid: %d\n", getpid());
     int sockfd = m_socket(AF_INET, SOCK_MTP, 0);
     if(sockfd < 0){
         perror("socket creation failed");
@@ -28,7 +29,7 @@ int main(int argc, char const *argv[])
     }
 
     printf("Bind done\n");
-    sleep(7);
+    sleep(10);
 
     char buf[1024];
 

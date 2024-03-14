@@ -246,25 +246,29 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
     
     bzero(buf, len);
     int index=(msocket[sockfd].rwnd.window_start)%RECV_BUFFER_SIZE;
-        if(msocket[sockfd].rwnd.exp_msgs[index].message[0] != '\0'){
+    printf("checking for message in msocket[%d].rwnd.exp_msgs[%d].message\n", sockfd, index);
+    if(msocket[sockfd].rwnd.exp_msgs[index].message[0] != '\0'){
+        printf("Writing to buf now\n");
+        sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[index].message);
+        printf("buf = %s\n", buf);
+        P(mtx);
+        msocket[sockfd].rwnd.exp_msgs[index].seq_no = msocket[sockfd].rwnd.curr_seq_no;
+        msocket[sockfd].rwnd.curr_seq_no=((msocket[sockfd].rwnd.curr_seq_no+1)%15)+1;
+        bzero(msocket[sockfd].rwnd.exp_msgs[index].message, 1024);
+        msocket[sockfd].rwnd.wndsize++;
+        msocket[sockfd].rwnd.window_start = (msocket[sockfd].rwnd.window_start+1)%RECV_BUFFER_SIZE;
+        V(mtx);
 
-            sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[index].message);
+        printf("All done here\n");
 
-            P(mtx);
-            msocket[sockfd].rwnd.exp_msgs[index].seq_no = msocket[sockfd].rwnd.curr_seq_no;
-            msocket[sockfd].rwnd.curr_seq_no=((msocket[sockfd].rwnd.curr_seq_no+1)%15)+1;
-            bzero(msocket[sockfd].rwnd.exp_msgs[index].message, 1024);
-            msocket[sockfd].rwnd.wndsize++;
-            msocket[sockfd].rwnd.window_start = (msocket[sockfd].rwnd.window_start+1)%RECV_BUFFER_SIZE;
-            V(mtx);
+        struct sockaddr_in *src = (struct sockaddr_in *)src_addr;
+        src->sin_family = AF_INET;
+        src->sin_port = htons(msocket[sockfd].port);
+        src->sin_addr.s_addr = inet_addr(msocket[sockfd].ip);        
 
-            struct sockaddr_in *src = (struct sockaddr_in *)src_addr;
-            src->sin_family = AF_INET;
-            src->sin_port = htons(msocket[sockfd].port);
-            src->sin_addr.s_addr = inet_addr(msocket[sockfd].ip);
-            *addrlen = sizeof(*src);
-            return strlen(buf);
-        }
+        printf("recv done!\n");
+        return strlen(buf);
+    }
         
         else{
             errno = ENOMSG;
@@ -276,29 +280,52 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
 
 int m_close(int sockfd)
 {
+    // todo: check!!! 
+    int semid1, semid2, mtx;
+    struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};
+    
+
+    key_t key1=ftok("msocket.h", 101);
+    key_t key2=ftok("msocket.h", 102);
+    key_t key3=ftok("msocket.h", 103);
+
+    semid1 = semget(key1, 1, 0777|IPC_CREAT);
+    semid2 = semget(key2, 1, 0777|IPC_CREAT);
+    mtx = semget(key3, 1, 0777|IPC_CREAT);
+    
     key_t key = ftok("msocket.h", 99);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
 
-    int mtx; 
-    struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};
-    key_t key3=ftok("msocket.h", 103);
-    mtx = semget(key3, 1, 0777|IPC_CREAT);
+    key_t key_sockinfo=ftok("msocket.h", 100);
+    int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
+        SOCK_INFO *sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
 
+    P(mtx);
+    sockinfo->sockid = sockfd;
+    sockinfo->port = 0;
+    strcpy(sockinfo->IP, "");
+    V(mtx);
 
-    for (int i = 0; i < N; i++)
-    {
-        if (SM[i].pid == getpid())
-        {   
-            P(mtx);
-            SM[i].free = 1;
-            if(close(SM[i].udpsockfd) == -1) {
-                V(mtx);
-                return -1;
-            }
-            V(mtx);
-            return 0;
-        }
+    printf("pid = %d\n", getpid());
+    V(semid1);
+    printf("semid1 signaled\n");
+    P(semid2);
+
+    if(sockinfo->sockid == -1){
+        errno = sockinfo->errno;
+        P(mtx);
+        sockinfo->sockid=0;
+        sockinfo->errno=0;
+        sockinfo->port=0;
+        strcpy(sockinfo->IP, "");
+        V(mtx);
+        return -1;
     }
-    return -1;
+
+    P(mtx);
+    SM[sockfd].free = 1;
+    V(mtx);
+
+    return 0;
 }

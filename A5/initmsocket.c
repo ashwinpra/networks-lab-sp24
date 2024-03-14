@@ -76,6 +76,7 @@ void *receiver(void *arg) {
                     struct sockaddr_in cliaddr;
                     int len = sizeof(cliaddr);
                     char buf[1024];
+                    bzero(buf, 1024);
                     int n = recvfrom(SM[i].udpsockfd, buf, 1024, 0, (struct sockaddr *)&cliaddr, &len);
                     if (n == -1)
                     {
@@ -83,7 +84,7 @@ void *receiver(void *arg) {
                         pthread_exit(NULL);
                     }
 
-                    printf("Received message: %s\n", buf);
+                    printf("Received message: %s from port %d\n", buf, ntohs(cliaddr.sin_port));
                     
                     // add it to recv_buffer of the receiver socket (find by matching ip and port)
                    
@@ -155,6 +156,7 @@ void *receiver(void *arg) {
                                 if(SM[i].rwnd.exp_msgs[index].seq_no == seq_num){
                                     P(mtx);
                                     strcpy(SM[i].rwnd.exp_msgs[index].message, msg);
+                                    printf("Writing to SM[%d].rwnd.exp_msgs[%d].message = %s\n", i, index, SM[i].rwnd.exp_msgs[index].message);
                                     if(next_seq==seq_num){
                                         SM[i].rwnd.window_end=index;
                                         SM[i].rwnd.wndsize--;
@@ -177,7 +179,6 @@ void *receiver(void *arg) {
                             }
 
                         }else{
-
                             index=(SM[i].rwnd.window_end+1)%RECV_BUFFER_SIZE;
                             int next_seq=SM[i].rwnd.exp_msgs[index].seq_no;
 
@@ -185,6 +186,8 @@ void *receiver(void *arg) {
                                 if(SM[i].rwnd.exp_msgs[index].seq_no == seq_num){
                                     P(mtx);
                                     strcpy(SM[i].rwnd.exp_msgs[index].message, msg);
+                                    printf("Writing to SM[%d].rwnd.exp_msgs[%d].message = %s\n", i, index, SM[i].rwnd.exp_msgs[index].message);
+                                    
                                     if(next_seq==seq_num){
                                         SM[i].rwnd.window_end=index;
                                         SM[i].rwnd.wndsize--;
@@ -478,6 +481,23 @@ int main()
             V(mtx);
             printf("Socket created\n");
         }
+
+        else if(sockinfo->sockid!=0 && sockinfo->port==0 && strcmp(sockinfo->IP,"")==0){
+            // m_close call
+            printf("Close call!\n");
+            int sockfd = sockinfo->sockid;
+            if(close(sockfd) == -1){
+                sockinfo->sockid = -1;
+                sockinfo->errno = errno;
+            }
+            else{
+                sockinfo->sockid = 0;
+            }
+            V(semid2);
+            V(mtx);
+            printf("Close done!\n");
+        }
+
         else if(sockinfo->sockid!=0 && sockinfo->port!=0 && strcmp(sockinfo->IP,"")!=0){
             printf("Bind call!\n");
             //m_bind call
