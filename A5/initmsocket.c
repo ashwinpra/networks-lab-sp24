@@ -24,17 +24,17 @@ void *receiver(void *arg) {
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
 
     /*
- When it receives a message, if it is a data message, it stores it in the receiver-side message buffer for
-the corresponding MTP socket (by searching SM with the IP/Port), and sends an ACK
-message to the sender. In addition it also sets a flag nospace if the available space at the
-receive buffer is zero. On a timeout over select(), it additionally checks whether the flag
-nospace was set but now there is space available in the receive buffer. In that case, it sends
-a duplicate ACK message with the last acknowledged sequence number but with the updated
-rwnd size, and resets the flag (there might be a problem here – try to find it out and resolve!).
+    When it receives a message, if it is a data message, it stores it in the receiver-side message buffer for
+    the corresponding MTP socket (by searching SM with the IP/Port), and sends an ACK
+    message to the sender. In addition it also sets a flag nospace if the available space at the
+    receive buffer is zero. On a timeout over select(), it additionally checks whether the flag
+    nospace was set but now there is space available in the receive buffer. In that case, it sends
+    a duplicate ACK message with the last acknowledged sequence number but with the updated
+    rwnd size, and resets the flag (there might be a problem here – try to find it out and resolve!).
 */
 
     while (1)
-    {
+    {   
         fd_set fds;
         FD_ZERO(&fds);
         int maxfd = -1;
@@ -54,9 +54,11 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
         printf("maxfd = %d\n", maxfd);
 
         struct timeval tv;
-        tv.tv_sec = 1;
+        tv.tv_sec = T;
         tv.tv_usec = 0;
+        printf("Waiting on select\n");
         int retval = select(maxfd + 1, &fds, NULL, NULL, &tv);
+        printf("Select done\n");
 
         if (retval == -1)
         {
@@ -69,7 +71,7 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
             for (int i = 0; i < N; i++)
             {
                 if (SM[i].free == 0 && FD_ISSET(SM[i].udpsockfd, &fds))
-                {
+                {   
                     // receive message
                     struct sockaddr_in cliaddr;
                     int len = sizeof(cliaddr);
@@ -234,17 +236,20 @@ void *sender(void* arg) {
     */
    while(1){
         sleep((4*T)/10);
-
+        printf("Sender thread woke up\n");
         /*On waking up, it first checks whether the message timeout period (T) is over
     (by computing the time difference between the current time and the time when the messages
     within the window were sent last) for the messages sent over any of the active MTP sockets.*/
         for(int i=0; i<N; i++){
-            if(SM[i].free == 0){
-                        // printf("Hereee in sender\n");
+            // printf("Checking first loop for i =%d\n", i);
+            // printf("SM[i].free = %d, SM[i].swnd.recv_wndsize = %d, SM[i].port = %d, SM[i].ip = %s\n", SM[i].free, SM[i].swnd.recv_wndsize, SM[i].port, SM[i].ip);
+            if(SM[i].free == 0 && SM[i].swnd.recv_wndsize > 0 && SM[i].port!=0 && strcmp(SM[i].ip,"")!=0){
+                        printf("Hereee in sender\n");
                         // check if T is over
                         time_t curr_time;
                         time(&curr_time);
                         if(difftime(curr_time, SM[i].swnd.timestamp) > T){
+                            printf("retransmit?!\n");
                             // retransmit
                             int curr_seq_no = SM[i].swnd.unack_msgs[SM[i].swnd.window_start].seq_no;
                             for(int j=0;j<SEND_BUFFER_SIZE;j++){
@@ -258,6 +263,8 @@ void *sender(void* arg) {
                                 int len = sizeof(cliaddr);
 
                                 if(SM[i].swnd.unack_msgs[index].seq_no == curr_seq_no){
+                                    printf("Sending a message!\n");
+                                    printf("Sending message %s\n", SM[i].swnd.unack_msgs[index].message);
                                     sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[index].message, strlen(SM[i].swnd.unack_msgs[index].message), 0, (struct sockaddr *)&cliaddr, len);
                                     P(mtx);
                                     if(j==0) SM[i].swnd.timestamp = curr_time;
@@ -274,7 +281,9 @@ void *sender(void* arg) {
 
 
         for(int i=0; i<N; i++){
+            // printf("Checking second loop for i =%d\n", i);
             if(SM[i].free == 0 && SM[i].swnd.recv_wndsize > 0 && SM[i].port!=0 && strcmp(SM[i].ip,"")!=0){
+                printf("Here4\n");
                 int j=SM[i].swnd.window_end;
                 int curr_seq_no = ((SM[i].swnd.unack_msgs[j].seq_no+1)%15)+1;
                 if(curr_seq_no==-1) continue;
@@ -294,6 +303,8 @@ void *sender(void* arg) {
                     if(already_sent>=SM[i].swnd.recv_wndsize) break;
                     if(SM[i].swnd.unack_msgs[j].seq_no == curr_seq_no){
                         // send message
+                        printf("Sending a message!!!\n");
+                        printf("Sending message %s\n", SM[i].swnd.unack_msgs[j].message);
                         sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[j].message, strlen(SM[i].swnd.unack_msgs[j].message), 0, (struct sockaddr *)&cliaddr, len);
                         P(mtx);
                         SM[i].swnd.window_end=j;
@@ -309,6 +320,7 @@ void *sender(void* arg) {
                 }
             }
         }
+        printf("OVER!\n");
    }
 }
 
@@ -358,14 +370,12 @@ int main()
 
 
     P(mtx);
-    printf("I AM HEREE");
     sockinfo->sockid = 0;
     sockinfo->port = 0;
-    printf("I AM HERE");
     strcpy(sockinfo->IP, "");
     V(mtx);
 
-    printf("in main thread, sockinfo->IP=%s", sockinfo->IP);
+    // printf("in main thread, sockinfo->IP=%s", sockinfo->IP);
 
     //shared memory
     int key = ftok("msocket.h", 99);
@@ -390,6 +400,7 @@ int main()
 
     while(1){
         //wait on Sem1
+        printf("Waiting on sem1\n");
         P(semid1);
         printf("sem1 Signal received\n");
         /* b) On being signaled, look at SOCK_INFO.
@@ -434,6 +445,7 @@ int main()
             }
             V(semid2);
             V(mtx);
+            printf("Bind done!\n");
         }
     }
 

@@ -14,8 +14,6 @@ int main(int argc, char const *argv[])
     }
 
     printf("Socket created!\n");
-
-    sleep(5);
     
     struct sockaddr_in dest_addr;
     dest_addr.sin_family = AF_INET;
@@ -24,26 +22,27 @@ int main(int argc, char const *argv[])
 
     printf("Binding to user1\n");
 
-    // if(m_bind(sockfd, "127.0.0.1", 8080, "127.0.0.1", 8081) < 0){
-    //     perror("bind failed");
-    //     return -1;
-    // }
+    if(m_bind(sockfd, "127.0.0.1", 8080, "127.0.0.1", 8081) < 0){
+        perror("bind failed");
+        return -1;
+    }
 
-    // printf("Bind done\n");
+    printf("Bind done\n");
+    sleep(7);
 
-    // char buf[1024];
+    char buf[1024];
 
-    // if(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
-    //     perror("recvfrom failed");
-    //     return -1;
-    // }
+    if(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
+        perror("recvfrom failed");
+        return -1;
+    }
 
-    // printf("Received: %s\n", buf);
+    printf("Received: %s\n", buf);
 
-    // if(m_close(sockfd) < 0){
-    //     perror("close failed");
-    //     return -1;
-    // }
+    if(m_close(sockfd) < 0){
+        perror("close failed");
+        return -1;
+    }
 
     sleep(10);
 
