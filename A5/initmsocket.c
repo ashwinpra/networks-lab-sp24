@@ -9,6 +9,9 @@
 #include <msocket.h>
 #include <sys/select.h>
 #include <sys/sem.h>	
+// #include <errno.h>
+#include <time.h>
+#include <string.h>
 
 SOCK_INFO *sockinfo;
 struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};

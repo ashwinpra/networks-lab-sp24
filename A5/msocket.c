@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -7,6 +8,8 @@
 #include <sys/shm.h>
 #include <msocket.h>
 #include <sys/sem.h>	
+// #include <errno.h>
+#include <time.h>
  
 
 int m_socket(int domain, int type, int protocol) {
@@ -180,7 +183,7 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
     key_t key3=ftok("msocket.h", 103);
     mtx = semget(key3, 1, 0777|IPC_CREAT);
 
-    char * dest_port = ntohs(((struct sockaddr_in *)dest_addr)->sin_port);
+    int dest_port = ntohs(((struct sockaddr_in *)dest_addr)->sin_port);
     char *dest_ip = inet_ntoa(((struct sockaddr_in *)dest_addr)->sin_addr);
     
     if(msocket[sockfd].port != dest_port || msocket[sockfd].ip != dest_ip){
