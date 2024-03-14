@@ -87,144 +87,144 @@ void *receiver(void *arg) {
                     
                     // add it to recv_buffer of the receiver socket (find by matching ip and port)
                    
-                            // if its a normal message, it's of the form "seq:msg"
-                            // if its an ACK, it's of the form "<last_inorder_seq>:<rwnd_size>:ACK"
+                    // if its a normal message, it's of the form "seq:msg"
+                    // if its an ACK, it's of the form "<last_inorder_seq>:<rwnd_size>:ACK"
 
-                            // handle separately if its ack
-                            if (strcmp(buf + n - 3, "ACK") == 0)
-                            {   
+                    // handle separately if its ack
+                    if (strcmp(buf + n - 3, "ACK") == 0)
+                    {   
 
-                                int last_inorder_seq = atoi(strtok(buf, ":"));
-                                int rwnd_size = atoi(strtok(NULL, ":"));
-                                P(mtx);
-                                SM[i].swnd.recv_wndsize = rwnd_size;
-                                V(mtx);
+                        int last_inorder_seq = atoi(strtok(buf, ":"));
+                        int rwnd_size = atoi(strtok(NULL, ":"));
+                        P(mtx);
+                        SM[i].swnd.recv_wndsize = rwnd_size;
+                        V(mtx);
 
-                                //! case 1: ack = start, then fine, move window by 1 
-                                //! case 2: ack is somewhere between start to end - move window completely 
-                                //! case 3: ack is not in the range - duplicate ack, ignore
+                        //! case 1: ack = start, then fine, move window by 1 
+                        //! case 2: ack is somewhere between start to end - move window completely 
+                        //! case 3: ack is not in the range - duplicate ack, ignore
 
-                                int index=SM[i].swnd.window_start;
-                                int count=0;int flag=0;
+                        int index=SM[i].swnd.window_start;
+                        int count=0;int flag=0;
 
-                                while(1){
-                                    count++;
-                                    if(SM[i].swnd.unack_msgs[index].seq_no == last_inorder_seq){
-                                        // SM[j].swnd.window_start=(index+count)%SEND_BUFFER_SIZE;
-                                        // SM[j].swnd.wndsize+=count;
-                                        flag=1;
-                                        break;
-                                    }
-
-                                    if(index==SM[i].swnd.window_end) break;
-                                    index=(index+1)%SEND_BUFFER_SIZE;
-                                }
-
-                                index=SM[i].swnd.window_start;
-                                if(flag){
-                                    while(count--){
-                                        P(mtx);
-                                        SM[i].swnd.unack_msgs[index].seq_no=-1;
-                                        bzero(SM[i].swnd.unack_msgs[index].message, 1024);
-                                        index=(index+1)%SEND_BUFFER_SIZE;
-                                        SM[i].swnd.window_start=index;
-                                        SM[i].swnd.wndsize++;
-                                        V(mtx);
-                                    }
-                                }
-
+                        while(1){
+                            count++;
+                            if(SM[i].swnd.unack_msgs[index].seq_no == last_inorder_seq){
+                                // SM[j].swnd.window_start=(index+count)%SEND_BUFFER_SIZE;
+                                // SM[j].swnd.wndsize+=count;
+                                flag=1;
                                 break;
                             }
 
-                            else {
-                                // remove header; message will be of the form "seq:msg"
-                                int seq_num = atoi(strtok(buf, ":"));
-                                char* msg = strtok(NULL, ":");
+                            if(index==SM[i].swnd.window_end) break;
+                            index=(index+1)%SEND_BUFFER_SIZE;
+                        }
 
-                                //! case 1: in order (start index) - accept it (move window would be done by recvfrom function)
-                                //! case 2: out of order - store it 
-                                //! case 3: duplicate - ignore it
-                                //null the string
-                                int index;
+                        index=SM[i].swnd.window_start;
+                        if(flag){
+                            while(count--){
+                                P(mtx);
+                                SM[i].swnd.unack_msgs[index].seq_no=-1;
+                                bzero(SM[i].swnd.unack_msgs[index].message, 1024);
+                                index=(index+1)%SEND_BUFFER_SIZE;
+                                SM[i].swnd.window_start=index;
+                                SM[i].swnd.wndsize++;
+                                V(mtx);
+                            }
+                        }
 
-                                if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
-                                    index=SM[i].rwnd.window_start;
-                                    int next_seq=SM[i].rwnd.exp_msgs[index].seq_no;
+                        break;
+                    }
 
-                                    while(1){
-                                        if(SM[i].rwnd.exp_msgs[index].seq_no == seq_num){
-                                            P(mtx);
-                                            strcpy(SM[i].rwnd.exp_msgs[index].message, msg);
-                                            if(next_seq==seq_num){
-                                                SM[i].rwnd.window_end=index;
-                                                SM[i].rwnd.wndsize--;
-                                                index=(index+1)%RECV_BUFFER_SIZE;
-                                                next_seq=((next_seq+1)%15)+1;
-                                                while(index!=SM[i].rwnd.window_start && SM[i].rwnd.exp_msgs[index].seq_no==next_seq){
-                                                    if(SM[i].rwnd.exp_msgs[index].message[0]=='\0') break;
-                                                    SM[i].rwnd.window_end=index;
-                                                    SM[i].rwnd.wndsize--;
-                                                    next_seq=((next_seq+1)%15)+1;
-                                                    index=(index+1)%RECV_BUFFER_SIZE;
-                                                }
-                                            }
-                                            V(mtx);
-                                            break;
-                                        }
-                                        
+                    else {
+                        // remove header; message will be of the form "seq:msg"
+                        int seq_num = atoi(strtok(buf, ":"));
+                        char* msg = strtok(NULL, ":");
+
+                        //! case 1: in order (start index) - accept it (move window would be done by recvfrom function)
+                        //! case 2: out of order - store it 
+                        //! case 3: duplicate - ignore it
+                        //null the string
+                        int index;
+
+                        if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
+                            index=SM[i].rwnd.window_start;
+                            int next_seq=SM[i].rwnd.exp_msgs[index].seq_no;
+
+                            while(1){
+                                if(SM[i].rwnd.exp_msgs[index].seq_no == seq_num){
+                                    P(mtx);
+                                    strcpy(SM[i].rwnd.exp_msgs[index].message, msg);
+                                    if(next_seq==seq_num){
+                                        SM[i].rwnd.window_end=index;
+                                        SM[i].rwnd.wndsize--;
                                         index=(index+1)%RECV_BUFFER_SIZE;
-                                        if(index==SM[i].rwnd.window_start) break;
+                                        next_seq=((next_seq+1)%15)+1;
+                                        while(index!=SM[i].rwnd.window_start && SM[i].rwnd.exp_msgs[index].seq_no==next_seq){
+                                            if(SM[i].rwnd.exp_msgs[index].message[0]=='\0') break;
+                                            SM[i].rwnd.window_end=index;
+                                            SM[i].rwnd.wndsize--;
+                                            next_seq=((next_seq+1)%15)+1;
+                                            index=(index+1)%RECV_BUFFER_SIZE;
+                                        }
                                     }
-
-                                }else{
-
-                                    index=(SM[i].rwnd.window_end+1)%RECV_BUFFER_SIZE;
-                                    int next_seq=SM[i].rwnd.exp_msgs[index].seq_no;
-
-                                    while(index!=SM[i].rwnd.window_start ){
-                                        if(SM[i].rwnd.exp_msgs[index].seq_no == seq_num){
-                                            P(mtx);
-                                            strcpy(SM[i].rwnd.exp_msgs[index].message, msg);
-                                            if(next_seq==seq_num){
-                                                SM[i].rwnd.window_end=index;
-                                                SM[i].rwnd.wndsize--;
-                                                index=(index+1)%RECV_BUFFER_SIZE;
-                                                next_seq=((next_seq+1)%15)+1;
-                                                while(index!=SM[i].rwnd.window_start && SM[i].rwnd.exp_msgs[index].seq_no==next_seq){
-                                                     if(SM[i].rwnd.exp_msgs[index].message[0]=='\0') break;
-                                                    SM[i].rwnd.window_end=index;
-                                                    SM[i].rwnd.wndsize--;
-                                                    next_seq=((next_seq+1)%15)+1;
-                                                    index=(index+1)%RECV_BUFFER_SIZE;
-                                                }
-                                            }
-                                            V(mtx);
-                                            break;
-                                        }
-                                        
-                                        index=(index+1)%RECV_BUFFER_SIZE;
-                                    } 
-
+                                    V(mtx);
+                                    break;
                                 }
-
                                 
+                                index=(index+1)%RECV_BUFFER_SIZE;
+                                if(index==SM[i].rwnd.window_start) break;
+                            }
 
-                                // send ACK in proper format: "<last_inorder_seq>:<rwnd_size>:ACK"
-                                int last_seq_no;
-                                if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
-                                    last_seq_no=(SM[i].rwnd.curr_seq_no-RECV_BUFFER_SIZE-1+16)%16;
-                                    if(last_seq_no==0) last_seq_no++;
-                                }else last_seq_no=SM[i].rwnd.exp_msgs[SM[i].rwnd.window_end].seq_no;
-                                    
-                                index=SM[i].rwnd.window_end;
-                                char ack[1024];
-                                bzero(ack, 1024);
-                                sprintf(ack, "%d:%d:ACK", last_seq_no, SM[i].rwnd.wndsize);
+                        }else{
 
-                                sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
+                            index=(SM[i].rwnd.window_end+1)%RECV_BUFFER_SIZE;
+                            int next_seq=SM[i].rwnd.exp_msgs[index].seq_no;
 
-                                break;
-                            }   
+                            while(index!=SM[i].rwnd.window_start ){
+                                if(SM[i].rwnd.exp_msgs[index].seq_no == seq_num){
+                                    P(mtx);
+                                    strcpy(SM[i].rwnd.exp_msgs[index].message, msg);
+                                    if(next_seq==seq_num){
+                                        SM[i].rwnd.window_end=index;
+                                        SM[i].rwnd.wndsize--;
+                                        index=(index+1)%RECV_BUFFER_SIZE;
+                                        next_seq=((next_seq+1)%15)+1;
+                                        while(index!=SM[i].rwnd.window_start && SM[i].rwnd.exp_msgs[index].seq_no==next_seq){
+                                                if(SM[i].rwnd.exp_msgs[index].message[0]=='\0') break;
+                                            SM[i].rwnd.window_end=index;
+                                            SM[i].rwnd.wndsize--;
+                                            next_seq=((next_seq+1)%15)+1;
+                                            index=(index+1)%RECV_BUFFER_SIZE;
+                                        }
+                                    }
+                                    V(mtx);
+                                    break;
+                                }
+                                
+                                index=(index+1)%RECV_BUFFER_SIZE;
+                            } 
+
+                        }
+
+                        
+
+                        // send ACK in proper format: "<last_inorder_seq>:<rwnd_size>:ACK"
+                        int last_seq_no;
+                        if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
+                            last_seq_no=(SM[i].rwnd.curr_seq_no-RECV_BUFFER_SIZE-1+16)%16;
+                            if(last_seq_no==0) last_seq_no++;
+                        }else last_seq_no=SM[i].rwnd.exp_msgs[SM[i].rwnd.window_end].seq_no;
+                            
+                        index=SM[i].rwnd.window_end;
+                        char ack[1024];
+                        bzero(ack, 1024);
+                        sprintf(ack, "%d:%d:ACK", last_seq_no, SM[i].rwnd.wndsize);
+
+                        sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
+
+                        break;
+                    }   
                         
                 }
             }
