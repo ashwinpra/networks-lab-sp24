@@ -31,7 +31,7 @@ typedef struct{
     int errno;
 } SOCK_INFO;
 
-typedef struct{
+typedef struct{ 
     int seq_no;
     char message[1024];
 } packet_t;
@@ -50,10 +50,10 @@ typedef struct {
     int wndsize;    // window size indicating max number of messages that can be received based on buffer availability
     int window_start;
     int window_end;
-    int curr_seq_no;
+    int curr_seq_no; 
 } rwnd_t;
 
-typedef struct {
+typedef struct _msocket_t{
     int free;  // 1 if its free, 0 otherwise
     int pid; // pid of the process that created the socket
     int udpsockfd; // socket descriptor of the underlying UDP socket
