@@ -299,15 +299,14 @@ int m_close(int sockfd)
 
     key_t key_sockinfo=ftok("msocket.h", 100);
     int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
-        SOCK_INFO *sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
+    SOCK_INFO *sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
 
     P(mtx);
-    sockinfo->sockid = sockfd;
+    sockinfo->sockid = SM[sockfd].udpsockfd;
     sockinfo->port = 0;
     strcpy(sockinfo->IP, "");
     V(mtx);
 
-    printf("pid = %d\n", getpid());
     V(semid1);
     printf("semid1 signaled\n");
     P(semid2);
@@ -326,6 +325,8 @@ int m_close(int sockfd)
     P(mtx);
     SM[sockfd].free = 1;
     V(mtx);
+
+    printf("Done closing\n");
 
     return 0;
 }

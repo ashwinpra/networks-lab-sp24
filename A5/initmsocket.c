@@ -16,7 +16,8 @@
 
 SOCK_INFO* sockinfo;
 struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};
-int semid1, semid2, mtx;
+int semid1, semid2, mtx, close_sem;
+int close_called = 0;
 
 
 void *receiver(void *arg) {
@@ -35,6 +36,11 @@ void *receiver(void *arg) {
 
     while (1)
     {   
+        P(mtx);
+        if(close_called){
+            V(mtx);
+            break;
+        }
         fd_set fds;
         FD_ZERO(&fds);
         int maxfd = -1;
@@ -42,7 +48,7 @@ void *receiver(void *arg) {
         {  
             if (SM[i].free == 0)
             {  
-                printf("This dude is free\n");
+                printf("%d is free\n", i);
                 FD_SET(SM[i].udpsockfd, &fds);
                 if (SM[i].udpsockfd > maxfd)
                 {
@@ -50,6 +56,7 @@ void *receiver(void *arg) {
                 }
             }
         }
+        V(mtx);
 
         printf("maxfd = %d\n", maxfd);
 
@@ -58,7 +65,7 @@ void *receiver(void *arg) {
         tv.tv_usec = 0;
         printf("Waiting on select\n");
         int retval = select(maxfd + 1, &fds, NULL, NULL, &tv);
-        printf("Select done\n");
+        printf("Select done with retval = %d\n", retval);
 
         if (retval == -1)
         {
@@ -83,6 +90,12 @@ void *receiver(void *arg) {
                         perror("recvfrom()");
                         pthread_exit(NULL);
                     }
+
+                    if(n==0){
+                        printf("Connection closed by client\n");
+                        continue;
+                    }
+
 
                     printf("Received message: %s from port %d\n", buf, ntohs(cliaddr.sin_port));
                     
@@ -326,7 +339,7 @@ void *sender(void* arg) {
         for(int i=0; i<N; i++){
             // printf("Checking second loop for i =%d\n", i);
             if(SM[i].free == 0 && SM[i].swnd.recv_wndsize > 0 && SM[i].port!=0 && strcmp(SM[i].ip,"")!=0){
-                printf("Here4\n");
+                // printf("Here4\n");
 
                 struct sockaddr_in cliaddr;
                 cliaddr.sin_family = AF_INET;
@@ -375,7 +388,7 @@ void *sender(void* arg) {
                 }
             }
         }
-        printf("OVER!\n");
+        // printf("OVER!\n");
    }
 }
 
@@ -409,14 +422,17 @@ int main()
     key_t key1=ftok("msocket.h", 101);
     key_t key2=ftok("msocket.h", 102);
     key_t key3=ftok("msocket.h", 103);
+    key_t key4=ftok("msocket.h", 110);
     
     semid1 = semget(key1, 1, 0777|IPC_CREAT);
     semid2 = semget(key2, 1, 0777|IPC_CREAT);
     mtx = semget(key3, 1, 0777|IPC_CREAT);
+    close_sem = semget(key4, 1, 0777|IPC_CREAT);
     
     semctl(semid1, 0, SETVAL, 0);
     semctl(semid2, 0, SETVAL, 0);
     semctl(mtx, 0, SETVAL, 1);
+    semctl(close_sem, 0, SETVAL, 0);
 
     //shared memory
     key_t key_sockinfo=ftok("msocket.h", 100);
@@ -469,7 +485,7 @@ int main()
         if(sockinfo->sockid==0 && sockinfo->port==0 && strcmp(sockinfo->IP,"")==0){
             //m_socket call
             int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-            printf("Creating socket\n");
+            // printf("Creating socket\n");
             if(sockfd == -1){
                 sockinfo->sockid = -1;
                 sockinfo->errno = errno;
@@ -479,27 +495,34 @@ int main()
             }
             V(semid2);
             V(mtx);
-            printf("Socket created\n");
+            // printf("Socket created with \n");
         }
 
         else if(sockinfo->sockid!=0 && sockinfo->port==0 && strcmp(sockinfo->IP,"")==0){
             // m_close call
             printf("Close call!\n");
+            close_called = 1;
             int sockfd = sockinfo->sockid;
+            printf("sockfd = %d\n", sockfd);
             if(close(sockfd) == -1){
+                printf("close failed\n");
                 sockinfo->sockid = -1;
                 sockinfo->errno = errno;
             }
             else{
+                printf("close success\n");
                 sockinfo->sockid = 0;
             }
+            printf("LOl1\n");
             V(semid2);
+                printf("LOl2\n");
+            V(close_sem);
             V(mtx);
             printf("Close done!\n");
         }
 
         else if(sockinfo->sockid!=0 && sockinfo->port!=0 && strcmp(sockinfo->IP,"")!=0){
-            printf("Bind call!\n");
+            // printf("Bind call!\n");
             //m_bind call
             int sockfd = sockinfo->sockid;
             struct sockaddr_in src_addr;
@@ -517,7 +540,7 @@ int main()
             }
             V(semid2);
             V(mtx);
-            printf("Bind done!\n");
+            // printf("Bind done!\n");
         }
     }
 

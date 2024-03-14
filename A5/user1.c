@@ -7,7 +7,6 @@
 // this will run on port 8080, and talk to user 2 on port 8081
 int main(int argc, char const *argv[])
 {   
-    printf("My pid: %d\n", getpid());
     int sockfd = m_socket(AF_INET, SOCK_MTP, 0);
     if(sockfd < 0){
         perror("socket creation failed");
@@ -30,24 +29,26 @@ int main(int argc, char const *argv[])
     }
 
     printf("Bind done\n");
-    sleep(7);
+    sleep(3);
 
-    char buf[] = "Hello from user1";
+    // char buf[] = "Hello from user1";
 
-    if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
-        perror("sendto failed");
-        return -1;
-    }
+    // if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
+    //     perror("sendto failed");
+    //     return -1;
+    // }
 
-    printf("Sent!\n");
-    sleep(30);
+    // printf("Sent!\n");
+    // sleep(30);
 
     if(m_close(sockfd) < 0){
         perror("close failed");
         return -1;
     }
 
-    sleep(10);
+    printf("Closed!");
+
+    // sleep(10);
 
     return 0;
 }
