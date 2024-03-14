@@ -73,6 +73,7 @@ int m_socket(int domain, int type, int protocol) {
     SM[freeidx].swnd.curr_seq_no=1;
     SM[freeidx].swnd.timestamp = time(NULL);
     SM[freeidx].swnd.wndsize = SEND_BUFFER_SIZE;
+    SM[freeidx].swnd.recv_wndsize=RECV_BUFFER_SIZE;
     SM[freeidx].swnd.window_start = 0;
     SM[freeidx].swnd.window_end = 0;
     for(int i=0;i<SEND_BUFFER_SIZE;i++){
@@ -156,7 +157,7 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
     char * dest_port = ntohs(((struct sockaddr_in *)dest_addr)->sin_port);
     char *dest_ip = inet_ntoa(((struct sockaddr_in *)dest_addr)->sin_addr);
     
-    if(msocket[sockfd].port != dest_port || strcmp(msocket[sockfd].ip, dest_ip)){
+    if(msocket[sockfd].port != dest_port || strcmp(msocket[sockfd].ip, dest_ip!=0)){
         errno = ENOTBOUND;
         return -1;
     }
@@ -165,17 +166,19 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
         return -1;
     }
     
-
-    for(int i=0;i<SEND_BUFFER_SIZE;i++){
-        int index=(msocket[sockfd].swnd.window_start+i)%SEND_BUFFER_SIZE;
-        if(msocket[sockfd].swnd.unack_msgs[index].seq_no == -1){
-            sprintf(msocket[sockfd].swnd.unack_msgs[index].message, "%d:%s", msocket[sockfd].swnd.curr_seq_no, buf);
-            msocket[sockfd].swnd.unack_msgs[index].seq_no = msocket[sockfd].swnd.curr_seq_no;
-            msocket[sockfd].swnd.curr_seq_no++;
-            msocket[sockfd].swnd.wndsize--;
-            return strlen(buf);
+        int index=(msocket[sockfd].swnd.window_end+1)%SEND_BUFFER_SIZE;
+        int curr_seq_no=(msocket[sockfd].swnd.unack_msgs[msocket[sockfd].swnd.window_end].seq_no+1)%15;
+        while(index!=msocket[sockfd].swnd.window_start ){
+            if(msocket[sockfd].swnd.unack_msgs[index].seq_no == -1){
+                sprintf(msocket[sockfd].swnd.unack_msgs[index].message, "%d:%s", msocket[sockfd].swnd.curr_seq_no, buf);
+                msocket[sockfd].swnd.unack_msgs[index].seq_no = msocket[sockfd].swnd.curr_seq_no;
+                msocket[sockfd].swnd.curr_seq_no=((msocket[sockfd].swnd.curr_seq_no+1)%15)+1;
+                msocket[sockfd].swnd.wndsize--;
+                return strlen(buf);
+                break;
+            }
+            index=(index+1)%SEND_BUFFER_SIZE;
         }
-    }
     return 0;
 }
 
@@ -185,16 +188,13 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
     int key = ftok("msocket.h", 99);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
-    if(msocket[sockfd].rwnd.wndsize == RECV_BUFFER_SIZE){
-        errno = ENOMSG;
-        return -1;
-    }
+    
     bzero(buf, len);
-    for(int i=0;i<RECV_BUFFER_SIZE;i++){
-        if(msocket[sockfd].rwnd.exp_msgs[i].seq_no != -1){
-            sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[i].message);
-            msocket[sockfd].rwnd.exp_msgs[i].seq_no = -1;
-            bzero(msocket[sockfd].rwnd.exp_msgs[i].message, 1024);
+    int index=(msocket[sockfd].rwnd.window_start)%RECV_BUFFER_SIZE;
+        if(msocket[sockfd].rwnd.exp_msgs[index].seq_no != -1){
+            sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[index].message);
+            msocket[sockfd].rwnd.exp_msgs[index].seq_no = -1;
+            bzero(msocket[sockfd].rwnd.exp_msgs[index].message, 1024);
             msocket[sockfd].rwnd.wndsize++;
 
             struct sockaddr_in *src = (struct sockaddr_in *)src_addr;
@@ -203,8 +203,10 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
             src->sin_addr.s_addr = inet_addr(msocket[sockfd].ip);
             *addrlen = sizeof(*src);
             return strlen(buf);
+        }else{
+            errno = ENOMSG;
+            return -1;
         }
-    }
     return 0;
 }
 
