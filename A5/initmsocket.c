@@ -10,10 +10,11 @@
 #include <sys/select.h>
 #include <sys/sem.h>	
 // #include <errno.h>
+#include <signal.h>
 #include <time.h>
 #include <string.h>
 
-SOCK_INFO *sockinfo;
+SOCK_INFO* sockinfo;
 struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};
 int semid1, semid2, mtx;
 
@@ -38,9 +39,10 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
         FD_ZERO(&fds);
         int maxfd = -1;
         for (int i = 0; i < N; i++)
-        {
+        {  
             if (SM[i].free == 0)
-            {
+            {  
+                printf("This dude is free\n");
                 FD_SET(SM[i].udpsockfd, &fds);
                 if (SM[i].udpsockfd > maxfd)
                 {
@@ -49,8 +51,10 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
             }
         }
 
+        printf("maxfd = %d\n", maxfd);
+
         struct timeval tv;
-        tv.tv_sec = T;
+        tv.tv_sec = 1;
         tv.tv_usec = 0;
         int retval = select(maxfd + 1, &fds, NULL, NULL, &tv);
 
@@ -89,10 +93,13 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
 
                             // handle separately if its ack
                             if (strcmp(buf + n - 3, "ACK") == 0)
-                            {
+                            {   
+
                                 int last_inorder_seq = atoi(strtok(buf, ":"));
                                 int rwnd_size = atoi(strtok(NULL, ":"));
+                                P(mtx);
                                 SM[j].swnd.recv_wndsize = rwnd_size;
+                                V(mtx);
 
                                 //! case 1: ack = start, then fine, move window by 1 
                                 //! case 2: ack is somewhere between start to end - move window completely 
@@ -117,11 +124,13 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
                                 index=SM[j].swnd.window_start;
                                 if(flag){
                                     while(count--){
+                                        P(mtx);
                                         SM[j].swnd.unack_msgs[index].seq_no=-1;
                                         bzero(SM[j].swnd.unack_msgs[index].message, 1024);
                                         index=(index+1)%SEND_BUFFER_SIZE;
                                         SM[j].swnd.window_start=index;
                                         SM[j].swnd.wndsize++;
+                                        V(mtx);
                                     }
                                 }
 
@@ -144,6 +153,7 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
 
                                 while(index!=SM[j].rwnd.window_start && SM[j].rwnd.exp_msgs[index].seq_no!=-1){
                                     if(SM[j].rwnd.exp_msgs[index].seq_no == seq_num){
+                                        P(mtx);
                                         strcpy(SM[j].rwnd.exp_msgs[index].message, msg);
                                         if(next_seq==seq_num){
                                             SM[j].rwnd.window_end=index;
@@ -156,6 +166,7 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
                                                 index=(index+1)%RECV_BUFFER_SIZE;
                                             }
                                         }
+                                        V(mtx);
                                         break;
                                     }
                                     
@@ -179,7 +190,7 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
         }
 
         else
-        {
+        {  
             printf("No data within %d seconds.\n", T);
             // see if any of the 'nospace's can be updated
             for(int i=0; i<N; i++)
@@ -194,6 +205,8 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
                     }
                 }
             }
+
+            // todo: re-send ACK with updated rwnd size
         }
     }
 }
@@ -201,8 +214,11 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
 
 void *sender(void* arg) {
 
+    printf("Sender thread started\n");
+
     int shmid = (int)arg;
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
+
     /*
     The thread S behaves in the following manner. It sleeps for some time ( < T/2 ), and wakes up periodically.
     On waking up, it first checks whether the message timeout period (T) is over
@@ -226,6 +242,7 @@ void *sender(void* arg) {
     within the window were sent last) for the messages sent over any of the active MTP sockets.*/
         for(int i=0; i<N; i++){
             if(SM[i].free == 0){
+                        // printf("Hereee in sender\n");
                         // check if T is over
                         time_t curr_time;
                         time(&curr_time);
@@ -244,6 +261,7 @@ void *sender(void* arg) {
 
                                 if(SM[i].swnd.unack_msgs[index].seq_no == curr_seq_no){
                                     sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[index].message, strlen(SM[i].swnd.unack_msgs[index].message), 0, (struct sockaddr *)&cliaddr, len);
+                                    P(mtx);
                                     if(j==0) SM[i].swnd.timestamp = curr_time;
                                     curr_seq_no=((curr_seq_no+1)%15)+1;
                                     SM[i].swnd.window_end=index;
@@ -252,14 +270,13 @@ void *sender(void* arg) {
                                 
                                 else break;
                             }
-
                         }
             }
         }
 
 
         for(int i=0; i<N; i++){
-            if(SM[i].free == 0){
+            if(SM[i].free == 0 && SM[i].swnd.recv_wndsize > 0 && SM[i].port!=0 && strcmp(SM[i].ip,"")!=0){
                 int j=SM[i].swnd.window_end;
                 int curr_seq_no = ((SM[i].swnd.unack_msgs[j].seq_no+1)%15)+1;
                 if(curr_seq_no==-1) continue;
@@ -280,10 +297,14 @@ void *sender(void* arg) {
                     if(SM[i].swnd.unack_msgs[j].seq_no == curr_seq_no){
                         // send message
                         sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[j].message, strlen(SM[i].swnd.unack_msgs[j].message), 0, (struct sockaddr *)&cliaddr, len);
+                        P(mtx);
                         SM[i].swnd.window_end=j;
                         SM[i].swnd.timestamp = time(NULL);
+                        V(mtx);
                         curr_seq_no=((curr_seq_no+1)%15)+1;
-                    }else break;
+                    }
+                    
+                    else break;
 
                     j=(j+1)%SEND_BUFFER_SIZE;
                     already_sent++;
@@ -298,36 +319,67 @@ void *garbage_collector(void *arg) {
     int shmid = (int)arg;
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
 
+    while(1){
+        // see if any pid has exited
+        for(int i=0; i<N; i++){
+            if(SM[i].free == 0){
+                if(kill(SM[i].pid, 0) == -1){
+                    // pid has exited
+                    P(mtx);
+                    SM[i].free = 1;
+                    if(close(SM[i].udpsockfd) == -1) {
+                        V(mtx);
+                        perror("close()");
+                        pthread_exit(NULL);
+                    }
+                    V(mtx);
+                }
+            }
+        }
+    }
 }
 
 int main()
 {   
-    //shared memory
-    key_t key_sockinfo=ftok("msocket.h", 100);
-    int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
-    sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
-    memset(sockinfo, 0, sizeof(SOCK_INFO));
-
     key_t key1=ftok("msocket.h", 101);
     key_t key2=ftok("msocket.h", 102);
     key_t key3=ftok("msocket.h", 103);
-
+    
     semid1 = semget(key1, 1, 0777|IPC_CREAT);
-	semid2 = semget(key2, 1, 0777|IPC_CREAT);
+    semid2 = semget(key2, 1, 0777|IPC_CREAT);
     mtx = semget(key3, 1, 0777|IPC_CREAT);
-
+    
     semctl(semid1, 0, SETVAL, 0);
-	semctl(semid2, 0, SETVAL, 0);
+    semctl(semid2, 0, SETVAL, 0);
     semctl(mtx, 0, SETVAL, 1);
+
+    //shared memory
+    key_t key_sockinfo=ftok("msocket.h", 100);
+    int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
+    sockinfo = (SOCK_INFO*) shmat(shmid_sockinfo, 0, 0);
+
+
+    P(mtx);
+    printf("I AM HEREE");
+    sockinfo->sockid = 0;
+    sockinfo->port = 0;
+    printf("I AM HERE");
+    strcpy(sockinfo->IP, "");
+    V(mtx);
+
+    printf("in main thread, sockinfo->IP=%s", sockinfo->IP);
 
     //shared memory
     int key = ftok("msocket.h", 99);
     int shmid = shmget(key, N * sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
     memset(SM, 0, N * sizeof(msocket_t));
+
+    P(mtx);
     for(int i=0;i<N;i++){
         SM[i].free = 1;
     }
+    V(mtx);
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -339,19 +391,21 @@ int main()
     pthread_create(&G, &attr, garbage_collector, (void *)shmid); // to handle garbage collection
 
     while(1){
-
         //wait on Sem1
         P(semid1);
+        printf("sem1 Signal received\n");
         /* b) On being signaled, look at SOCK_INFO.
         (c) If all fields are 0, it is a m_socket call. Create a UDP socket. Put the socket id returned in the sock_id field of SOCK_INFO.  If error, put -1 in sock_id field and errno in errno field. Signal on Sem2.
         (d) if sock_id, IP, and port are non-zero, it is a m_bind call. Make a bind() call on the sock_id value, with the IP and port given. If error, reset sock_id to -1 in the structure and put errno in errno field. Signal on Sem2.
         (e) Go back to wait on Sem1 */
 
         //look at SOCK_INFO
+        P(mtx);
+        printf("mtx unlocked\n");
         if(sockinfo->sockid==0 && sockinfo->port==0 && strcmp(sockinfo->IP,"")==0){
             //m_socket call
             int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-            P(mtx);
+            printf("Creating socket\n");
             if(sockfd == -1){
                 sockinfo->sockid = -1;
                 sockinfo->errno = errno;
@@ -361,8 +415,10 @@ int main()
             }
             V(semid2);
             V(mtx);
+            printf("Socket created\n");
         }
         else if(sockinfo->sockid!=0 && sockinfo->port!=0 && strcmp(sockinfo->IP,"")!=0){
+            printf("Bind call!\n");
             //m_bind call
             int sockfd = sockinfo->sockid;
             struct sockaddr_in src_addr;
@@ -371,7 +427,6 @@ int main()
             inet_aton(sockinfo->IP, &src_addr.sin_addr);
         
             int res = bind(sockfd, (struct sockaddr *)&src_addr, sizeof(src_addr));
-            P(mtx);
             if(res == -1){
                 sockinfo->sockid = -1;
                 sockinfo->errno = errno;
