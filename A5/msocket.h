@@ -57,7 +57,7 @@ typedef struct _msocket_t{
     int free;  // 1 if its free, 0 otherwise
     int pid; // pid of the process that created the socket
     int udpsockfd; // socket descriptor of the underlying UDP socket
-    char *ip; // ip address of the other end of the MTP socket
+    char ip[16]; // ip address of the other end of the MTP socket
     int port; // port number of the other end of the MTP socket
     swnd_t swnd; 
     rwnd_t rwnd; 
