@@ -199,6 +199,13 @@ void *sender(void* arg) {
                             int curr_seq_no = SM[i].swnd.unack_msgs[SM[i].swnd.window_start].seq_no;
                             for(int j=0;j<SEND_BUFFER_SIZE;j++){
                                 int index=(SM[i].swnd.window_start+j)%SEND_BUFFER_SIZE;
+
+                                struct sockaddr_in cliaddr;
+                                cliaddr.sin_family = AF_INET;
+                                cliaddr.sin_port = htons(SM[i].port);
+                                inet_aton(SM[i].ip, &cliaddr.sin_addr);
+                                int len = sizeof(cliaddr);
+
                                 if(SM[i].swnd.unack_msgs[index].seq_no == curr_seq_no){
                                     sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[index].message, strlen(SM[i].swnd.unack_msgs[index].message), 0, (struct sockaddr *)&cliaddr, len);
                                     if(j==0) SM[i].swnd.timestamp = curr_time;
@@ -221,6 +228,12 @@ void *sender(void* arg) {
                 if(curr_seq_no==-1) continue;
 
                 j=(j+1)%SEND_BUFFER_SIZE;
+
+                struct sockaddr_in cliaddr;
+                cliaddr.sin_family = AF_INET;
+                cliaddr.sin_port = htons(SM[i].port);
+                inet_aton(SM[i].ip, &cliaddr.sin_addr);
+                int len = sizeof(cliaddr);
 
                 while(j!=SM[i].swnd.window_start){
                     if(SM[i].swnd.unack_msgs[j].seq_no == -1) break;
