@@ -19,7 +19,6 @@
 #define ENOBUFS 501 
 #define ENOTBOUND 502
 #define ENOMSG 503
-#define EMISC 504
 
 #define P(s) semop(s, &pop, 1)  
 #define V(s) semop(s, &vop, 1)  
