@@ -38,9 +38,9 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
         FD_ZERO(&fds);
         int maxfd = -1;
         for (int i = 0; i < N; i++)
-        {
+        {  
             if (SM[i].free == 0)
-            {
+            {  
                 FD_SET(SM[i].udpsockfd, &fds);
                 if (SM[i].udpsockfd > maxfd)
                 {
@@ -179,7 +179,7 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
         }
 
         else
-        {
+        {  
             printf("No data within %d seconds.\n", T);
             // see if any of the 'nospace's can be updated
             for(int i=0; i<N; i++)
@@ -201,8 +201,11 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
 
 void *sender(void* arg) {
 
+    printf("Sender thread started\n");
+
     int shmid = (int)arg;
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
+
     /*
     The thread S behaves in the following manner. It sleeps for some time ( < T/2 ), and wakes up periodically.
     On waking up, it first checks whether the message timeout period (T) is over
@@ -327,6 +330,10 @@ int main()
         SM[i].free = 1;
     }
 
+    for(int i=0; i<N; i++){
+        SM[i].free = 1;
+    }
+
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
@@ -337,7 +344,6 @@ int main()
     pthread_create(&G, &attr, garbage_collector, (void *)shmid); // to handle garbage collection
 
     while(1){
-
         //wait on Sem1
         P(semid1);
         /* b) On being signaled, look at SOCK_INFO.

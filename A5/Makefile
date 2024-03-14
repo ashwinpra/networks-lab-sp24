@@ -1,11 +1,11 @@
 lib: msocket.o
-	ar rcs libfoothread.a msocket.o
+	ar rcs libmsocket.a msocket.o
 
 msocket.o: msocket.c msocket.h
 	gcc -fPIC -Wall -c -I. msocket.c
 
-init: 
-	gcc -o init initmsocket.c -L. -lfoothread -lpthread
+init: lib initmsocket.c
+	gcc -Wall -I. -L. -o init initmsocket.c -lmsocket -pthread
 	./init
 
 clean:
