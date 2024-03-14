@@ -14,7 +14,7 @@
 #include <time.h>
 #include <string.h>
 
-SOCK_INFO *sockinfo;
+SOCK_INFO* sockinfo;
 struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};
 int semid1, semid2, mtx;
 
@@ -54,7 +54,7 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
         printf("maxfd = %d\n", maxfd);
 
         struct timeval tv;
-        tv.tv_sec = T;
+        tv.tv_sec = 1;
         tv.tv_usec = 0;
         int retval = select(maxfd + 1, &fds, NULL, NULL, &tv);
 
@@ -354,12 +354,14 @@ int main()
     //shared memory
     key_t key_sockinfo=ftok("msocket.h", 100);
     int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
-    sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
+    sockinfo = (SOCK_INFO*) shmat(shmid_sockinfo, 0, 0);
+
 
     P(mtx);
+    printf("I AM HEREE");
     sockinfo->sockid = 0;
     sockinfo->port = 0;
-    sockinfo->IP = (char *)malloc(16);
+    printf("I AM HERE");
     strcpy(sockinfo->IP, "");
     V(mtx);
 
@@ -388,7 +390,6 @@ int main()
 
     while(1){
         //wait on Sem1
-        printf("Waiting for sem1\n");
         P(semid1);
         printf("sem1 Signal received\n");
         /* b) On being signaled, look at SOCK_INFO.
@@ -399,7 +400,6 @@ int main()
         //look at SOCK_INFO
         P(mtx);
         printf("mtx unlocked\n");
-        printf("sockinfo->sockid=%d, sockinfo->port=%d, sockinfo->IP=%s\n", sockinfo->sockid, sockinfo->port, sockinfo->IP);
         if(sockinfo->sockid==0 && sockinfo->port==0 && strcmp(sockinfo->IP,"")==0){
             //m_socket call
             int sockfd = socket(AF_INET, SOCK_DGRAM, 0);

@@ -83,8 +83,7 @@ int m_socket(int domain, int type, int protocol) {
     sockinfo->errno=0;
     sockinfo->port=0;
     printf("Fine till here\n");
-    char* x = "";
-    sockinfo->IP = x;
+    strcpy(sockinfo->IP, "");
     printf("Fine till here3\n");
 
     printf("Done1\n");
@@ -110,11 +109,14 @@ int m_socket(int domain, int type, int protocol) {
 
     V(mtx);
 
+    printf("SOCKET CREATED\n");
+    printf("sockinfo->sockid=%d, sockinfo->port=%d, sockinfo->IP=%s\n", sockinfo->sockid, sockinfo->port, sockinfo->IP);
+
     return freeidx;
 }
 
 int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port) {
-
+    printf("Bind called\n");
     /*Find the corresponding actual UDP socket id from the SM table. 
     Put the UDP socket ID, IP, and port in SOCK_INFO table. Signal Sem1. 
     Then wait on Sem2. On being woken, checks sock_id field of SOCK_INFO. 
