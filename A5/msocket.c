@@ -155,7 +155,7 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
     char * dest_port = ntohs(((struct sockaddr_in *)dest_addr)->sin_port);
     char *dest_ip = inet_ntoa(((struct sockaddr_in *)dest_addr)->sin_addr);
     
-    if(msocket[sockfd].port != dest_port || msocket[sockfd].ip != dest_ip){
+    if(msocket[sockfd].port != dest_port || strcmp(msocket[sockfd].ip, dest_ip)){
         errno = ENOTBOUND;
         return -1;
     }
