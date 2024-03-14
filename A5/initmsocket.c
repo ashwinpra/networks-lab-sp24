@@ -181,7 +181,7 @@ void *receiver(void *arg) {
                             index=(SM[i].rwnd.window_end+1)%RECV_BUFFER_SIZE;
                             int next_seq=SM[i].rwnd.exp_msgs[index].seq_no;
 
-                            while(index!=SM[i].rwnd.window_start ){
+                            while(index!=SM[i].rwnd.window_start){
                                 if(SM[i].rwnd.exp_msgs[index].seq_no == seq_num){
                                     P(mtx);
                                     strcpy(SM[i].rwnd.exp_msgs[index].message, msg);
@@ -206,8 +206,6 @@ void *receiver(void *arg) {
                             } 
 
                         }
-
-                        
 
                         // send ACK in proper format: "<last_inorder_seq>:<rwnd_size>:ACK"
                         int last_seq_no;

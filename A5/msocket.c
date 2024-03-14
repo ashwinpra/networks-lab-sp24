@@ -144,16 +144,10 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
     SOCK_INFO *sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
     
-    struct sockaddr_in src_addr;
-    src_addr.sin_family = AF_INET;
-    src_addr.sin_port = htons(src_port);
-    src_addr.sin_addr.s_addr = inet_addr(src_ip);
-
     P(mtx);
     sockinfo->sockid = SM[sockfd].udpsockfd;
-    sockinfo->port = dest_port;
-    strcpy(sockinfo->IP, dest_ip);
-    // sockinfo->IP = dest_ip;
+    sockinfo->port = src_port;
+    strcpy(sockinfo->IP, src_ip);
 
     V(semid1);
     V(mtx);
@@ -216,7 +210,7 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
     int index=(msocket[sockfd].swnd.window_end+1)%SEND_BUFFER_SIZE;
     printf("index = %d, window_start=%d", index, msocket[sockfd].swnd.window_start);
     // int curr_seq_no=(msocket[sockfd].swnd.unack_msgs[msocket[sockfd].swnd.window_end].seq_no+1)%15;
-    while(index!=msocket[sockfd].swnd.window_start ){
+    while(1){
         printf("index=%d, seq_no=%d\n", index, msocket[sockfd].swnd.unack_msgs[index].seq_no);
         if(msocket[sockfd].swnd.unack_msgs[index].seq_no == -1){
             sprintf(msocket[sockfd].swnd.unack_msgs[index].message, "%d:%s", msocket[sockfd].swnd.curr_seq_no, buf);
@@ -229,6 +223,9 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
             return strlen(buf);
         }
         index=(index+1)%SEND_BUFFER_SIZE;
+        if(index==msocket[sockfd].swnd.window_start){
+            break;
+        }
     }
 
     return 0;
