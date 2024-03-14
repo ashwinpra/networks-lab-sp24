@@ -93,7 +93,7 @@ int m_socket(int domain, int type, int protocol) {
     SM[freeidx].swnd.wndsize = SEND_BUFFER_SIZE;
     SM[freeidx].swnd.recv_wndsize=RECV_BUFFER_SIZE;
     SM[freeidx].swnd.window_start = 0;
-    SM[freeidx].swnd.window_end = 0;
+    SM[freeidx].swnd.window_end = -1;
     for(int i=0;i<SEND_BUFFER_SIZE;i++){
         SM[freeidx].swnd.unack_msgs[i].seq_no = -1;
     }
@@ -249,14 +249,16 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
     
     bzero(buf, len);
     int index=(msocket[sockfd].rwnd.window_start)%RECV_BUFFER_SIZE;
-        if(msocket[sockfd].rwnd.exp_msgs[index].seq_no != -1){
+        if(msocket[sockfd].rwnd.exp_msgs[index].message[0] != '\0'){
 
             sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[index].message);
 
             P(mtx);
-            msocket[sockfd].rwnd.exp_msgs[index].seq_no = -1;
+            msocket[sockfd].rwnd.exp_msgs[index].seq_no = msocket[sockfd].rwnd.curr_seq_no;
+            msocket[sockfd].rwnd.curr_seq_no=((msocket[sockfd].rwnd.curr_seq_no+1)%15)+1;
             bzero(msocket[sockfd].rwnd.exp_msgs[index].message, 1024);
             msocket[sockfd].rwnd.wndsize++;
+            msocket[sockfd].rwnd.window_start = (msocket[sockfd].rwnd.window_start+1)%RECV_BUFFER_SIZE;
             V(mtx);
 
             struct sockaddr_in *src = (struct sockaddr_in *)src_addr;
