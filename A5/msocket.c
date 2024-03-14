@@ -47,7 +47,7 @@ int m_socket(int domain, int type, int protocol) {
         errno = ENOBUFS;
         return -1;
     }
-
+    
     P(mtx);
     SM[freeidx].free = 0;
     SM[freeidx].pid = getpid();
@@ -58,28 +58,36 @@ int m_socket(int domain, int type, int protocol) {
     and return the index in SM table as usual. In both cases, reset all fields of SOCK_INFO to 0.*/
 
     V(semid1);
+    printf("semid1 signaled\n");
     P(semid2);
 
     if(sockinfo->sockid == -1){
         errno = sockinfo->errno;
-        
         P(mtx);
         sockinfo->sockid=0;
         sockinfo->errno=0;
         sockinfo->port=0;
-        sockinfo->IP="";
+        strcpy(sockinfo->IP, "");
         V(mtx);
 
         return -1;
     }
 
+    printf("semid2 signaled by someone\n");
+
     P(mtx);
+    printf("starting to update, sockinfo->sockid=%d\n", sockinfo->sockid);
     SM[freeidx].udpsockfd = sockinfo->sockid;
     
     sockinfo->sockid=0;
     sockinfo->errno=0;
     sockinfo->port=0;
-    sockinfo->IP="";
+    printf("Fine till here\n");
+    char* x = "";
+    sockinfo->IP = x;
+    printf("Fine till here3\n");
+
+    printf("Done1\n");
 
     SM[freeidx].swnd.curr_seq_no=1;
     SM[freeidx].swnd.timestamp = time(NULL);
@@ -143,7 +151,8 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     P(mtx);
     sockinfo->sockid = SM[sockfd].udpsockfd;
     sockinfo->port = dest_port;
-    sockinfo->IP = dest_ip;
+    strcpy(sockinfo->IP, dest_ip);
+    // sockinfo->IP = dest_ip;
 
     V(semid1);
     V(mtx);
@@ -153,7 +162,8 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     if(sockinfo->sockid == -1){
         errno = sockinfo->errno;
         P(mtx);
-        sockinfo->IP="";
+        strcpy(sockinfo->IP, "");
+        // sockinfo->IP="";
         sockinfo->sockid=0;
         sockinfo->port=0;
         sockinfo->errno = 0;
@@ -162,7 +172,8 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     }
     
     P(mtx);
-    sockinfo->IP="";
+    strcpy(sockinfo->IP, "");
+    // sockinfo->IP="";
     sockinfo->sockid=0;
     sockinfo->port=0;
     sockinfo->errno = 0;
@@ -187,7 +198,7 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
     int dest_port = ntohs(((struct sockaddr_in *)dest_addr)->sin_port);
     char *dest_ip = inet_ntoa(((struct sockaddr_in *)dest_addr)->sin_addr);
     
-    if(msocket[sockfd].port != dest_port || strcmp(msocket[sockfd].ip, dest_ip!=0)){
+    if(msocket[sockfd].port != dest_port || strcmp(msocket[sockfd].ip, dest_ip)!=0 ){
         errno = ENOTBOUND;
         return -1;
     }
@@ -196,7 +207,8 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
         errno = ENOBUFS;
         return -1;
     }
-    
+
+        // todo: check this
         int index=(msocket[sockfd].swnd.window_end+1)%SEND_BUFFER_SIZE;
         int curr_seq_no=(msocket[sockfd].swnd.unack_msgs[msocket[sockfd].swnd.window_end].seq_no+1)%15;
         while(index!=msocket[sockfd].swnd.window_start ){

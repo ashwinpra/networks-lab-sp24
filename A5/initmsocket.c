@@ -10,6 +10,7 @@
 #include <sys/select.h>
 #include <sys/sem.h>	
 // #include <errno.h>
+#include <signal.h>
 #include <time.h>
 #include <string.h>
 
@@ -41,6 +42,7 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
         {  
             if (SM[i].free == 0)
             {  
+                printf("This dude is free\n");
                 FD_SET(SM[i].udpsockfd, &fds);
                 if (SM[i].udpsockfd > maxfd)
                 {
@@ -48,6 +50,8 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
                 }
             }
         }
+
+        printf("maxfd = %d\n", maxfd);
 
         struct timeval tv;
         tv.tv_sec = T;
@@ -201,6 +205,8 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
                     }
                 }
             }
+
+            // todo: re-send ACK with updated rwnd size
         }
     }
 }
@@ -234,6 +240,7 @@ void *sender(void* arg) {
     within the window were sent last) for the messages sent over any of the active MTP sockets.*/
         for(int i=0; i<N; i++){
             if(SM[i].free == 0){
+                        // printf("Hereee in sender\n");
                         // check if T is over
                         time_t curr_time;
                         time(&curr_time);
@@ -261,14 +268,13 @@ void *sender(void* arg) {
                                 
                                 else break;
                             }
-
                         }
             }
         }
 
 
         for(int i=0; i<N; i++){
-            if(SM[i].free == 0){
+            if(SM[i].free == 0 && SM[i].swnd.recv_wndsize > 0 && SM[i].port!=0 && strcmp(SM[i].ip,"")!=0){
                 int j=SM[i].swnd.window_end;
                 int curr_seq_no = ((SM[i].swnd.unack_msgs[j].seq_no+1)%15)+1;
                 if(curr_seq_no==-1) continue;
@@ -333,36 +339,43 @@ void *garbage_collector(void *arg) {
 
 int main()
 {   
+    key_t key1=ftok("msocket.h", 101);
+    key_t key2=ftok("msocket.h", 102);
+    key_t key3=ftok("msocket.h", 103);
+    
+    semid1 = semget(key1, 1, 0777|IPC_CREAT);
+    semid2 = semget(key2, 1, 0777|IPC_CREAT);
+    mtx = semget(key3, 1, 0777|IPC_CREAT);
+    
+    semctl(semid1, 0, SETVAL, 0);
+    semctl(semid2, 0, SETVAL, 0);
+    semctl(mtx, 0, SETVAL, 1);
+
     //shared memory
     key_t key_sockinfo=ftok("msocket.h", 100);
     int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
     sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
-    memset(sockinfo, 0, sizeof(SOCK_INFO));
 
-    key_t key1=ftok("msocket.h", 101);
-    key_t key2=ftok("msocket.h", 102);
-    key_t key3=ftok("msocket.h", 103);
+    P(mtx);
+    sockinfo->sockid = 0;
+    sockinfo->port = 0;
+    sockinfo->IP = (char *)malloc(16);
+    strcpy(sockinfo->IP, "");
+    V(mtx);
 
-    semid1 = semget(key1, 1, 0777|IPC_CREAT);
-	semid2 = semget(key2, 1, 0777|IPC_CREAT);
-    mtx = semget(key3, 1, 0777|IPC_CREAT);
-
-    semctl(semid1, 0, SETVAL, 0);
-	semctl(semid2, 0, SETVAL, 0);
-    semctl(mtx, 0, SETVAL, 1);
+    printf("in main thread, sockinfo->IP=%s", sockinfo->IP);
 
     //shared memory
     int key = ftok("msocket.h", 99);
     int shmid = shmget(key, N * sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
     memset(SM, 0, N * sizeof(msocket_t));
+
+    P(mtx);
     for(int i=0;i<N;i++){
         SM[i].free = 1;
     }
-
-    for(int i=0; i<N; i++){
-        SM[i].free = 1;
-    }
+    V(mtx);
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -375,17 +388,22 @@ int main()
 
     while(1){
         //wait on Sem1
+        printf("Waiting for sem1\n");
         P(semid1);
+        printf("sem1 Signal received\n");
         /* b) On being signaled, look at SOCK_INFO.
         (c) If all fields are 0, it is a m_socket call. Create a UDP socket. Put the socket id returned in the sock_id field of SOCK_INFO.  If error, put -1 in sock_id field and errno in errno field. Signal on Sem2.
         (d) if sock_id, IP, and port are non-zero, it is a m_bind call. Make a bind() call on the sock_id value, with the IP and port given. If error, reset sock_id to -1 in the structure and put errno in errno field. Signal on Sem2.
         (e) Go back to wait on Sem1 */
 
         //look at SOCK_INFO
+        P(mtx);
+        printf("mtx unlocked\n");
+        printf("sockinfo->sockid=%d, sockinfo->port=%d, sockinfo->IP=%s\n", sockinfo->sockid, sockinfo->port, sockinfo->IP);
         if(sockinfo->sockid==0 && sockinfo->port==0 && strcmp(sockinfo->IP,"")==0){
             //m_socket call
             int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-            P(mtx);
+            printf("Creating socket\n");
             if(sockfd == -1){
                 sockinfo->sockid = -1;
                 sockinfo->errno = errno;
@@ -395,8 +413,10 @@ int main()
             }
             V(semid2);
             V(mtx);
+            printf("Socket created\n");
         }
         else if(sockinfo->sockid!=0 && sockinfo->port!=0 && strcmp(sockinfo->IP,"")!=0){
+            printf("Bind call!\n");
             //m_bind call
             int sockfd = sockinfo->sockid;
             struct sockaddr_in src_addr;
@@ -405,7 +425,6 @@ int main()
             inet_aton(sockinfo->IP, &src_addr.sin_addr);
         
             int res = bind(sockfd, (struct sockaddr *)&src_addr, sizeof(src_addr));
-            P(mtx);
             if(res == -1){
                 sockinfo->sockid = -1;
                 sockinfo->errno = errno;

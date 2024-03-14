@@ -25,7 +25,7 @@
 
 typedef struct{
     int sockid;
-    char * IP;
+    char* IP;
     int port;
     int errno;
 } SOCK_INFO;
