@@ -145,8 +145,8 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     sockinfo->port = dest_port;
     sockinfo->IP = dest_ip;
 
-    V(mtx);
     V(semid1);
+    V(mtx);
 
     P(semid2);
 
@@ -202,14 +202,16 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
         while(index!=msocket[sockfd].swnd.window_start ){
             if(msocket[sockfd].swnd.unack_msgs[index].seq_no == -1){
                 sprintf(msocket[sockfd].swnd.unack_msgs[index].message, "%d:%s", msocket[sockfd].swnd.curr_seq_no, buf);
+                P(mtx);
                 msocket[sockfd].swnd.unack_msgs[index].seq_no = msocket[sockfd].swnd.curr_seq_no;
                 msocket[sockfd].swnd.curr_seq_no=((msocket[sockfd].swnd.curr_seq_no+1)%15)+1;
                 msocket[sockfd].swnd.wndsize--;
+                V(mtx);
                 return strlen(buf);
-                break;
             }
             index=(index+1)%SEND_BUFFER_SIZE;
         }
+
     return 0;
 }
 
@@ -220,14 +222,23 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
     key_t key = ftok("msocket.h", 99);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
+
+    int mtx; 
+    struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};
+    key_t key3=ftok("msocket.h", 103);
+    mtx = semget(key3, 1, 0777|IPC_CREAT);
     
     bzero(buf, len);
     int index=(msocket[sockfd].rwnd.window_start)%RECV_BUFFER_SIZE;
         if(msocket[sockfd].rwnd.exp_msgs[index].seq_no != -1){
+
             sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[index].message);
+
+            P(mtx);
             msocket[sockfd].rwnd.exp_msgs[index].seq_no = -1;
             bzero(msocket[sockfd].rwnd.exp_msgs[index].message, 1024);
             msocket[sockfd].rwnd.wndsize++;
+            V(mtx);
 
             struct sockaddr_in *src = (struct sockaddr_in *)src_addr;
             src->sin_family = AF_INET;
@@ -235,10 +246,13 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
             src->sin_addr.s_addr = inet_addr(msocket[sockfd].ip);
             *addrlen = sizeof(*src);
             return strlen(buf);
-        }else{
+        }
+        
+        else{
             errno = ENOMSG;
             return -1;
         }
+
     return 0;
 }
 

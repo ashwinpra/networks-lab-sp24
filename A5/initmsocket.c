@@ -89,10 +89,13 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
 
                             // handle separately if its ack
                             if (strcmp(buf + n - 3, "ACK") == 0)
-                            {
+                            {   
+
                                 int last_inorder_seq = atoi(strtok(buf, ":"));
                                 int rwnd_size = atoi(strtok(NULL, ":"));
+                                P(mtx);
                                 SM[j].swnd.recv_wndsize = rwnd_size;
+                                V(mtx);
 
                                 //! case 1: ack = start, then fine, move window by 1 
                                 //! case 2: ack is somewhere between start to end - move window completely 
@@ -117,11 +120,13 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
                                 index=SM[j].swnd.window_start;
                                 if(flag){
                                     while(count--){
+                                        P(mtx);
                                         SM[j].swnd.unack_msgs[index].seq_no=-1;
                                         bzero(SM[j].swnd.unack_msgs[index].message, 1024);
                                         index=(index+1)%SEND_BUFFER_SIZE;
                                         SM[j].swnd.window_start=index;
                                         SM[j].swnd.wndsize++;
+                                        V(mtx);
                                     }
                                 }
 
@@ -144,6 +149,7 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
 
                                 while(index!=SM[j].rwnd.window_start && SM[j].rwnd.exp_msgs[index].seq_no!=-1){
                                     if(SM[j].rwnd.exp_msgs[index].seq_no == seq_num){
+                                        P(mtx);
                                         strcpy(SM[j].rwnd.exp_msgs[index].message, msg);
                                         if(next_seq==seq_num){
                                             SM[j].rwnd.window_end=index;
@@ -156,6 +162,7 @@ rwnd size, and resets the flag (there might be a problem here – try to find it
                                                 index=(index+1)%RECV_BUFFER_SIZE;
                                             }
                                         }
+                                        V(mtx);
                                         break;
                                     }
                                     
@@ -245,6 +252,7 @@ void *sender(void* arg) {
 
                                 if(SM[i].swnd.unack_msgs[index].seq_no == curr_seq_no){
                                     sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[index].message, strlen(SM[i].swnd.unack_msgs[index].message), 0, (struct sockaddr *)&cliaddr, len);
+                                    P(mtx);
                                     if(j==0) SM[i].swnd.timestamp = curr_time;
                                     curr_seq_no=((curr_seq_no+1)%15)+1;
                                     SM[i].swnd.window_end=index;
@@ -281,10 +289,14 @@ void *sender(void* arg) {
                     if(SM[i].swnd.unack_msgs[j].seq_no == curr_seq_no){
                         // send message
                         sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[j].message, strlen(SM[i].swnd.unack_msgs[j].message), 0, (struct sockaddr *)&cliaddr, len);
+                        P(mtx);
                         SM[i].swnd.window_end=j;
                         SM[i].swnd.timestamp = time(NULL);
+                        V(mtx);
                         curr_seq_no=((curr_seq_no+1)%15)+1;
-                    }else break;
+                    }
+                    
+                    else break;
 
                     j=(j+1)%SEND_BUFFER_SIZE;
                     already_sent++;
@@ -299,6 +311,24 @@ void *garbage_collector(void *arg) {
     int shmid = (int)arg;
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
 
+    while(1){
+        // see if any pid has exited
+        for(int i=0; i<N; i++){
+            if(SM[i].free == 0){
+                if(kill(SM[i].pid, 0) == -1){
+                    // pid has exited
+                    P(mtx);
+                    SM[i].free = 1;
+                    if(close(SM[i].udpsockfd) == -1) {
+                        V(mtx);
+                        perror("close()");
+                        pthread_exit(NULL);
+                    }
+                    V(mtx);
+                }
+            }
+        }
+    }
 }
 
 int main()
