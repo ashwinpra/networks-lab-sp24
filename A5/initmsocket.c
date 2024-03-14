@@ -11,9 +11,8 @@
 #include <sys/sem.h>	
 
 SOCK_INFO *sockinfo;
-
-int semid1, semid2;
-struct sembuf pop, vop;
+struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};
+int semid1, semid2, mtx;
 
 
 void *receiver(void *arg) {
@@ -22,7 +21,6 @@ void *receiver(void *arg) {
 
     while (1)
     {
-
         fd_set fds;
         FD_ZERO(&fds);
         int maxfd = -1;
@@ -55,7 +53,6 @@ void *receiver(void *arg) {
             {
                 if (SM[i].free == 0 && FD_ISSET(SM[i].udpsockfd, &fds))
                 {
-
                     // receive message
                     struct sockaddr_in cliaddr;
                     int len = sizeof(cliaddr);
@@ -164,7 +161,9 @@ void *receiver(void *arg) {
                 {
                     if(SM[i].rwnd.wndsize > 0)
                     {
+                        P(mtx);
                         SM[i].nospace = 0;
+                        V(mtx);
                     }
                 }
             }
@@ -198,7 +197,6 @@ void *sender(void* arg) {
     within the window were sent last) for the messages sent over any of the active MTP sockets.*/
         for(int i=0; i<N; i++){
             if(SM[i].free == 0){
-                
                         // check if T is over
                         time_t curr_time;
                         time(&curr_time);
@@ -216,11 +214,21 @@ void *sender(void* arg) {
 
                                 if(SM[i].swnd.unack_msgs[index].seq_no == curr_seq_no){
                                     sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[index].message, strlen(SM[i].swnd.unack_msgs[index].message), 0, (struct sockaddr *)&cliaddr, len);
-                                    if(j==0) SM[i].swnd.timestamp = curr_time;
+                                    
+                                    if(j==0) {
+                                        P(mtx);
+                                        SM[i].swnd.timestamp = curr_time;
+                                        V(mtx);
+                                    }
                                     curr_seq_no=(curr_seq_no+1)%SEND_BUFFER_SIZE;
                                     if(curr_seq_no==0) curr_seq_no++;
+
+                                    P(mtx);
                                     SM[i].swnd.window_end=index;
-                                }else break;
+                                    V(mtx);
+                                }
+                                
+                                else break;
                             }
 
                         }
@@ -280,18 +288,15 @@ int main()
 
     key_t key1=ftok("msocket.h", 101);
     key_t key2=ftok("msocket.h", 102);
+    key_t key3=ftok("msocket.h", 103);
 
     semid1 = semget(key1, 1, 0777|IPC_CREAT);
 	semid2 = semget(key2, 1, 0777|IPC_CREAT);
+    mtx = semget(key3, 1, 0777|IPC_CREAT);
 
     semctl(semid1, 0, SETVAL, 0);
 	semctl(semid2, 0, SETVAL, 0);
-
-    pop.sem_num = vop.sem_num = 0;
-	pop.sem_flg = vop.sem_flg = 0;
-	pop.sem_op = -1 ; vop.sem_op = 1 ;
-
-
+    semctl(mtx, 0, SETVAL, 1);
 
     //shared memory
     int key = ftok("msocket.h", 99);
@@ -312,15 +317,16 @@ int main()
 
         //wait on Sem1
         P(semid1);
-        /*b) On being signaled, look at SOCK_INFO.
+        /* b) On being signaled, look at SOCK_INFO.
         (c) If all fields are 0, it is a m_socket call. Create a UDP socket. Put the socket id returned in the sock_id field of SOCK_INFO.  If error, put -1 in sock_id field and errno in errno field. Signal on Sem2.
         (d) if sock_id, IP, and port are non-zero, it is a m_bind call. Make a bind() call on the sock_id value, with the IP and port given. If error, reset sock_id to -1 in the structure and put errno in errno field. Signal on Sem2.
-        (e) Go back to wait on Sem1*/
+        (e) Go back to wait on Sem1 */
 
         //look at SOCK_INFO
         if(sockinfo->sockid==0 && sockinfo->port==0 && strcmp(sockinfo->IP,"")==0){
             //m_socket call
             int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+            P(mtx);
             if(sockfd == -1){
                 sockinfo->sockid = -1;
                 sockinfo->errno = errno;
@@ -329,6 +335,7 @@ int main()
                 sockinfo->sockid = sockfd;
             }
             V(semid2);
+            V(mtx);
         }
         else if(sockinfo->sockid!=0 && sockinfo->port!=0 && strcmp(sockinfo->IP,"")!=0){
             //m_bind call
@@ -339,6 +346,7 @@ int main()
             inet_aton(sockinfo->IP, &src_addr.sin_addr);
         
             int res = bind(sockfd, (struct sockaddr *)&src_addr, sizeof(src_addr));
+            P(mtx);
             if(res == -1){
                 sockinfo->sockid = -1;
                 sockinfo->errno = errno;
@@ -347,6 +355,7 @@ int main()
                 sockinfo->sockid = sockfd;
             }
             V(semid2);
+            V(mtx);
         }
     }
 

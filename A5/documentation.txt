@@ -1,1 +1,1 @@
-todo: implement mutual exclusion while accessing shared memory
+todo: implement mutual exclusion while accessing shared memory (\/-)
