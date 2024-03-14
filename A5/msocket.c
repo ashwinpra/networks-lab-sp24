@@ -71,6 +71,7 @@ int m_socket(int domain, int type, int protocol) {
     sockinfo->IP="";
 
     SM[freeidx].swnd.curr_seq_no=1;
+    SM[freeidx].swnd.timestamp = time(NULL);
     SM[freeidx].swnd.wndsize = SEND_BUFFER_SIZE;
     SM[freeidx].swnd.window_start = 0;
     SM[freeidx].swnd.window_end = 0;
@@ -165,9 +166,10 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
     
 
     for(int i=0;i<SEND_BUFFER_SIZE;i++){
-        if(msocket[sockfd].swnd.unack_msgs[i].seq_no == -1){
-            sprintf(msocket[sockfd].swnd.unack_msgs[i].message, "%s", buf);
-            msocket[sockfd].swnd.unack_msgs[i].seq_no = msocket[sockfd].swnd.curr_seq_no;
+        int index=(msocket[sockfd].swnd.window_start+i)%SEND_BUFFER_SIZE;
+        if(msocket[sockfd].swnd.unack_msgs[index].seq_no == -1){
+            sprintf(msocket[sockfd].swnd.unack_msgs[index].message, "%d:%s", msocket[sockfd].swnd.curr_seq_no, buf);
+            msocket[sockfd].swnd.unack_msgs[index].seq_no = msocket[sockfd].swnd.curr_seq_no;
             msocket[sockfd].swnd.curr_seq_no++;
             msocket[sockfd].swnd.wndsize --;
             return strlen(buf);

@@ -42,6 +42,7 @@ typedef struct {
     int window_start;
     int window_end;
     int curr_seq_no;
+    time_t timestamp;
 } swnd_t; 
 
 typedef struct {

@@ -119,43 +119,72 @@ void *sender(void* arg) {
     On waking up, it first checks whether the message timeout period (T) is over
     (by computing the time difference between the current time and the time when the messages
     within the window were sent last) for the messages sent over any of the active MTP sockets.
-    If yes, it retransmits all the messages within the current swnd for that MTP socket. It then
+    If yes, it retransmits all the messages within the current swnd for that MTP socket. 
+    
+    It then
     checks the current swnd for each of the MTP sockets and determines whether there is a
     pending message from the sender-side message buffer that can be sent. If so, it sends that
     message through the UDP sendto() call for the corresponding UDP socket and updates the
-    send timestamp. Note: add the header to the message before sending it.
-    Header is just the sequence number of the message, separated from the message by a colon.
+    send timestamp.
     */
-    while (1)
-    {
-        // sleep for some time
-        sleep(T/2);
+   while(1){
+        sleep((4*T)/10);
 
         /*On waking up, it first checks whether the message timeout period (T) is over
     (by computing the time difference between the current time and the time when the messages
     within the window were sent last) for the messages sent over any of the active MTP sockets.*/
-        // for(int i=0; i<N; i++)
-        // {
-        //     if(SM[i].free == 0)
-        //     {
-        //         for(int j=0; j<SEND_BUFFER_SIZE; j++)
-        //         {
-        //             if(SM[i].send_buffer[j].free == 0)
-        //             {
-        //                 time_t now;
-        //                 time(&now);
-        //                 if(difftime(now, SM[i].send_buffer[j].timestamp) > T)
-        //                 {
-        //                     // retransmit
-        //                     sendto(SM[i].udpsockfd, SM[i].send_buffer[j].message, strlen(SM[i].send_buffer[j].message), 0, (struct sockaddr *)&SM[i].dest_addr, sizeof(SM[i].dest_addr));
-        //                     SM[i].send_buffer[j].timestamp = now;
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
+        for(int i=0; i<N; i++){
+            if(SM[i].free == 0){
+                
+                        // check if T is over
+                        time_t curr_time;
+                        time(&curr_time);
+                        if(difftime(curr_time, SM[i].swnd.timestamp) > T){
+                            // retransmit
+                            int curr_seq_no = SM[i].swnd.unack_msgs[SM[i].swnd.window_start].seq_no;
+                            for(int j=0;j<SEND_BUFFER_SIZE;j++){
+                                int index=(SM[i].swnd.window_start+j)%SEND_BUFFER_SIZE;
+                                if(SM[i].swnd.unack_msgs[index].seq_no == curr_seq_no){
+                                    sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[index].message, strlen(SM[i].swnd.unack_msgs[index].message), 0, (struct sockaddr *)&cliaddr, len);
+                                    if(j==0) SM[i].swnd.timestamp = curr_time;
+                                    curr_seq_no=(curr_seq_no+1)%SEND_BUFFER_SIZE;
+                                    if(curr_seq_no==0) curr_seq_no++;
+                                    SM[i].swnd.window_end=index;
+                                }else break;
+                            }
 
-    }
+                        }
+            }
+        }
+
+
+        for(int i=0; i<N; i++){
+            if(SM[i].free == 0){
+                int j=SM[i].swnd.window_end;
+                int curr_seq_no = (SM[i].swnd.unack_msgs[j].seq_no+1)%SEND_BUFFER_SIZE;
+                if(curr_seq_no==0) curr_seq_no++;
+                if(curr_seq_no==-1) continue;
+
+                j=(j+1)%SEND_BUFFER_SIZE;
+
+                while(j!=SM[i].swnd.window_start){
+                    if(SM[i].swnd.unack_msgs[j].seq_no == -1) break;
+
+                    if(SM[i].swnd.unack_msgs[j].seq_no == curr_seq_no){
+                        // send message
+                        sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[j].message, strlen(SM[i].swnd.unack_msgs[j].message), 0, (struct sockaddr *)&cliaddr, len);
+                        SM[i].swnd.window_end=j;
+                        SM[i].swnd.timestamp = time(NULL);
+                        curr_seq_no=(curr_seq_no+1)%SEND_BUFFER_SIZE;
+                        if(curr_seq_no==0) curr_seq_no++;
+                        break;
+                    }else break;
+
+                    j=(j+1)%SEND_BUFFER_SIZE;
+                }
+            }
+        }
+   }
 }
 
 void *garbage_collector(void *arg) {
