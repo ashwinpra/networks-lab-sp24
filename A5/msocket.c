@@ -216,7 +216,7 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
     int index=(msocket[sockfd].swnd.window_end+1)%SEND_BUFFER_SIZE;
     printf("index = %d, window_start=%d", index, msocket[sockfd].swnd.window_start);
     // int curr_seq_no=(msocket[sockfd].swnd.unack_msgs[msocket[sockfd].swnd.window_end].seq_no+1)%15;
-    while(index!=msocket[sockfd].swnd.window_start ){
+    while(1){
         printf("index=%d, seq_no=%d\n", index, msocket[sockfd].swnd.unack_msgs[index].seq_no);
         if(msocket[sockfd].swnd.unack_msgs[index].seq_no == -1){
             sprintf(msocket[sockfd].swnd.unack_msgs[index].message, "%d:%s", msocket[sockfd].swnd.curr_seq_no, buf);
@@ -229,7 +229,9 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
             return strlen(buf);
         }
         index=(index+1)%SEND_BUFFER_SIZE;
+        if(index==msocket[sockfd].swnd.window_start) break;
     }
+  
 
     return 0;
 }
