@@ -13,7 +13,7 @@ int main(int argc, char const *argv[])
         return -1;
     }
 
-    printf("Socket created!\n");
+    printf("Socket %d created!\n", sockfd);
 
 
     struct sockaddr_in dest_addr;
@@ -23,7 +23,7 @@ int main(int argc, char const *argv[])
 
     printf("Binding to user2\n");
 
-    if(m_bind(sockfd, "127.0.0.1", 8081, "127.0.0.1", 8080) < 0){
+    if(m_bind(sockfd, "127.0.0.1", 8080, "127.0.0.1", 8081) < 0){
         perror("bind failed");
         return -1;
     }
@@ -39,6 +39,7 @@ int main(int argc, char const *argv[])
     }
 
     printf("Sent!\n");
+    sleep(20);
 
     if(m_close(sockfd) < 0){
         perror("close failed");
