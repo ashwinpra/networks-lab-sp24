@@ -84,6 +84,10 @@ void *receiver(void *arg) {
                                 int rwnd_size = atoi(strtok(NULL, ":"));
                                 SM[j].swnd.wndsize = rwnd_size;
 
+                                //! case 1: ack = start, then fine, move window by 1 
+                                //! case 2: ack is somewhere between start to end - move window completely 
+                                //! case 3: ack is not in the range - duplicate ack, ignore
+
                                 for (int k = SM[j].swnd.window_start; k < SM[j].swnd.window_end; k++)
                                 {
                                     if (SM[j].swnd.unack_msgs[k].seq_no == last_inorder_seq)
@@ -109,6 +113,10 @@ void *receiver(void *arg) {
                                 // remove header; message will be of the form "seq:msg"
                                 int seq_num = atoi(strtok(buf, ":"));
                                 char* msg = strtok(NULL, ":");
+
+                                //! case 1: in order (start index) - accept it (move window would be done by recvfrom function)
+                                //! case 2: out of order - store it 
+                                //! case 3: duplicate - ignore it
 
                                 int last_inorder_seq = SM[j].rwnd.curr_seq_no - 1; //todo: check
 
