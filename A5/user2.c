@@ -20,33 +20,33 @@ int main(int argc, char const *argv[])
     dest_addr.sin_port = htons(8080);
     dest_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); 
 
-    printf("Binding to user1\n");
+    // printf("Binding to user1\n");
 
     if(m_bind(sockfd, "127.0.0.1", 8081, "127.0.0.1", 8080) < 0){
         perror("bind failed");
         return -1;
     }
 
-    printf("Bind done\n");
-    sleep(5);
+    // printf("Bind done!\n");
 
-    // char buf[1024];
+    sleep(15);
 
-    // if(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
-    //     perror("recvfrom failed");
-    //     return -1;
-    // }
+    char buf[1024];
 
-    // printf("Received: %s\n", buf);
-
-    if(m_close(sockfd) < 0){
-        perror("close failed");
-        return -1;
+    while(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){    
+        printf("1: Not received yet\n");
     }
 
-    printf("Closed!");
+    // printf("Received now!\n");
+    printf("\nReceived: %s\n\n", buf);
 
-    sleep(10);
+    while(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){    
+        printf("2: Not received yet\n");
+    }
+
+    printf("\nReceived: %s\n", buf);
+
+    m_close(sockfd);
 
     return 0;
 }

@@ -17,4 +17,4 @@ user2: lib user2.c
 	./user2
 
 clean:
-	rm -f *.o *.a user1 user2 init
+	rm -f *.o *.a user1 user2 ini

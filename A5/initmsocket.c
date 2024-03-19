@@ -16,8 +16,7 @@
 
 SOCK_INFO* sockinfo;
 struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};
-int semid1, semid2, mtx, close_sem;
-int close_called = 0;
+int semid1, semid2, mtx;
 
 
 void *receiver(void *arg) {
@@ -36,11 +35,6 @@ void *receiver(void *arg) {
 
     while (1)
     {   
-        P(mtx);
-        if(close_called){
-            V(mtx);
-            break;
-        }
         fd_set fds;
         FD_ZERO(&fds);
         int maxfd = -1;
@@ -48,7 +42,7 @@ void *receiver(void *arg) {
         {  
             if (SM[i].free == 0)
             {  
-                printf("%d is free\n", i);
+                // printf("%d is free\n", i);
                 FD_SET(SM[i].udpsockfd, &fds);
                 if (SM[i].udpsockfd > maxfd)
                 {
@@ -56,7 +50,6 @@ void *receiver(void *arg) {
                 }
             }
         }
-        V(mtx);
 
         printf("maxfd = %d\n", maxfd);
 
@@ -96,11 +89,11 @@ void *receiver(void *arg) {
                         continue;
                     }
 
-
-                    printf("Received message: %s from port %d\n", buf, ntohs(cliaddr.sin_port));
+                    if(dropMessage(p)){
+                        printf("Dropped message\n");
+                        continue;
+                    }
                     
-                    // add it to recv_buffer of the receiver socket (find by matching ip and port)
-                   
                     // if its a normal message, it's of the form "seq:msg"
                     // if its an ACK, it's of the form "<last_inorder_seq>:<rwnd_size>:ACK"
 
@@ -162,6 +155,7 @@ void *receiver(void *arg) {
                         int index;
 
                         if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
+                            printf("In case 1\n");
                             index=SM[i].rwnd.window_start;
                             int next_seq=SM[i].rwnd.exp_msgs[index].seq_no;
 
@@ -174,12 +168,12 @@ void *receiver(void *arg) {
                                         SM[i].rwnd.window_end=index;
                                         SM[i].rwnd.wndsize--;
                                         index=(index+1)%RECV_BUFFER_SIZE;
-                                        next_seq=((next_seq+1)%15)+1;
+                                        next_seq=((next_seq)%15)+1;
                                         while(index!=SM[i].rwnd.window_start && SM[i].rwnd.exp_msgs[index].seq_no==next_seq){
                                             if(SM[i].rwnd.exp_msgs[index].message[0]=='\0') break;
                                             SM[i].rwnd.window_end=index;
                                             SM[i].rwnd.wndsize--;
-                                            next_seq=((next_seq+1)%15)+1;
+                                            next_seq=((next_seq)%15)+1;
                                             index=(index+1)%RECV_BUFFER_SIZE;
                                         }
                                     }
@@ -205,12 +199,12 @@ void *receiver(void *arg) {
                                         SM[i].rwnd.window_end=index;
                                         SM[i].rwnd.wndsize--;
                                         index=(index+1)%RECV_BUFFER_SIZE;
-                                        next_seq=((next_seq+1)%15)+1;
+                                        next_seq=((next_seq)%15)+1;
                                         while(index!=SM[i].rwnd.window_start && SM[i].rwnd.exp_msgs[index].seq_no==next_seq){
                                                 if(SM[i].rwnd.exp_msgs[index].message[0]=='\0') break;
                                             SM[i].rwnd.window_end=index;
                                             SM[i].rwnd.wndsize--;
-                                            next_seq=((next_seq+1)%15)+1;
+                                            next_seq=((next_seq)%15)+1;
                                             index=(index+1)%RECV_BUFFER_SIZE;
                                         }
                                     }
@@ -319,12 +313,11 @@ void *sender(void* arg) {
                                 int len = sizeof(cliaddr);
 
                                 if(SM[i].swnd.unack_msgs[index].seq_no == curr_seq_no){
-                                    printf("Sending a message!\n");
-                                    printf("Sending message %s\n", SM[i].swnd.unack_msgs[index].message);
+                                    printf("Sending message! %s\n", SM[i].swnd.unack_msgs[index].message);
                                     sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[index].message, strlen(SM[i].swnd.unack_msgs[index].message), 0, (struct sockaddr *)&cliaddr, len);
                                     P(mtx);
                                     if(j==0) SM[i].swnd.timestamp = curr_time;
-                                    curr_seq_no=((curr_seq_no+1)%15)+1;
+                                    curr_seq_no=((curr_seq_no)%15)+1;
                                     SM[i].swnd.window_end=index;
                                     V(mtx);
                                 }
@@ -337,9 +330,9 @@ void *sender(void* arg) {
 
 
         for(int i=0; i<N; i++){
-            // printf("Checking second loop for i =%d\n", i);
+            // printf("[%d], free = %d, recv_wndsize = %d, port = %d, ip = %s\n", i, SM[i].free, SM[i].swnd.recv_wndsize, SM[i].port, SM[i].ip);
             if(SM[i].free == 0 && SM[i].swnd.recv_wndsize > 0 && SM[i].port!=0 && strcmp(SM[i].ip,"")!=0){
-                // printf("Here4\n");
+                printf("Here4, start = %d, end=%d, wndsize=%d\n", SM[i].swnd.window_start, SM[i].swnd.window_end, SM[i].swnd.wndsize);
 
                 struct sockaddr_in cliaddr;
                 cliaddr.sin_family = AF_INET;
@@ -347,38 +340,36 @@ void *sender(void* arg) {
                 inet_aton(SM[i].ip, &cliaddr.sin_addr);
                 int len = sizeof(cliaddr);
 
-                if(SM[i].swnd.wndsize== SEND_BUFFER_SIZE) continue;
+                if(SM[i].swnd.wndsize == 0) continue; //todo: check this line
                 int already_sent=0;
                 if(SM[i].swnd.window_end==-1){
                     SM[i].swnd.window_end=0;
+                    printf("Sending message!!! %s\n", SM[i].swnd.unack_msgs[0].message);
                     sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[0].message, strlen(SM[i].swnd.unack_msgs[0].message), 0, (struct sockaddr *)&cliaddr, len);
                     SM[i].swnd.timestamp = time(NULL);
                     already_sent++;
 
                 }
                 int j=SM[i].swnd.window_end;
-                int curr_seq_no = ((SM[i].swnd.unack_msgs[j].seq_no+1)%15)+1;
+                int curr_seq_no = ((SM[i].swnd.unack_msgs[j].seq_no)%15)+1;
                 if(curr_seq_no==-1) continue;
 
                already_sent+=((SM[i].swnd.window_end<SM[i].swnd.window_start)?SM[i].swnd.window_end+SEND_BUFFER_SIZE:SM[i].swnd.window_end)-SM[i].swnd.window_start;
 
                 j=(j+1)%SEND_BUFFER_SIZE;
 
-                
-
                 while(j!=SM[i].swnd.window_start){
                     if(SM[i].swnd.unack_msgs[j].seq_no == -1) break;
                     if(already_sent>=SM[i].swnd.recv_wndsize) break;
                     if(SM[i].swnd.unack_msgs[j].seq_no == curr_seq_no){
                         // send message
-                        printf("Sending a message!!!\n");
-                        printf("Sending message %s\n", SM[i].swnd.unack_msgs[j].message);
+                        printf("Sending message!!! %s\n", SM[i].swnd.unack_msgs[j].message);
                         sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[j].message, strlen(SM[i].swnd.unack_msgs[j].message), 0, (struct sockaddr *)&cliaddr, len);
                         P(mtx);
                         SM[i].swnd.window_end=j;
                         SM[i].swnd.timestamp = time(NULL);
                         V(mtx);
-                        curr_seq_no=((curr_seq_no+1)%15)+1;
+                        curr_seq_no=((curr_seq_no)%15)+1;
                     }
                     
                     else break;
@@ -419,20 +410,19 @@ void *garbage_collector(void *arg) {
 
 int main()
 {   
+    srand(time(0));
+
     key_t key1=ftok("msocket.h", 101);
     key_t key2=ftok("msocket.h", 102);
     key_t key3=ftok("msocket.h", 103);
-    key_t key4=ftok("msocket.h", 110);
     
     semid1 = semget(key1, 1, 0777|IPC_CREAT);
     semid2 = semget(key2, 1, 0777|IPC_CREAT);
     mtx = semget(key3, 1, 0777|IPC_CREAT);
-    close_sem = semget(key4, 1, 0777|IPC_CREAT);
     
     semctl(semid1, 0, SETVAL, 0);
     semctl(semid2, 0, SETVAL, 0);
     semctl(mtx, 0, SETVAL, 1);
-    semctl(close_sem, 0, SETVAL, 0);
 
     //shared memory
     key_t key_sockinfo=ftok("msocket.h", 100);
@@ -496,29 +486,6 @@ int main()
             V(semid2);
             V(mtx);
             // printf("Socket created with \n");
-        }
-
-        else if(sockinfo->sockid!=0 && sockinfo->port==0 && strcmp(sockinfo->IP,"")==0){
-            // m_close call
-            printf("Close call!\n");
-            close_called = 1;
-            int sockfd = sockinfo->sockid;
-            printf("sockfd = %d\n", sockfd);
-            if(close(sockfd) == -1){
-                printf("close failed\n");
-                sockinfo->sockid = -1;
-                sockinfo->errno = errno;
-            }
-            else{
-                printf("close success\n");
-                sockinfo->sockid = 0;
-            }
-            printf("LOl1\n");
-            V(semid2);
-                printf("LOl2\n");
-            V(close_sem);
-            V(mtx);
-            printf("Close done!\n");
         }
 
         else if(sockinfo->sockid!=0 && sockinfo->port!=0 && strcmp(sockinfo->IP,"")!=0){
