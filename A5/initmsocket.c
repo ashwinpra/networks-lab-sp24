@@ -38,6 +38,7 @@ void *receiver(void *arg) {
         fd_set fds;
         FD_ZERO(&fds);
         int maxfd = -1;
+        P(mtx);
         for (int i = 0; i < N; i++)
         {  
             if (SM[i].free == 0)
@@ -50,6 +51,7 @@ void *receiver(void *arg) {
                 }
             }
         }
+        V(mtx);
 
         printf("maxfd = %d\n", maxfd);
 
@@ -116,29 +118,31 @@ void *receiver(void *arg) {
 
                         while(1){
                             count++;
+                            P(mtx);
                             if(SM[i].swnd.unack_msgs[index].seq_no == last_inorder_seq){
                                 // SM[j].swnd.window_start=(index+count)%SEND_BUFFER_SIZE;
                                 // SM[j].swnd.wndsize+=count;
                                 flag=1;
+                                V(mtx);
                                 break;
                             }
-
                             if(index==SM[i].swnd.window_end) break;
                             index=(index+1)%SEND_BUFFER_SIZE;
+                            V(mtx);
                         }
 
+                        P(mtx);
                         index=SM[i].swnd.window_start;
                         if(flag){
                             while(count--){
-                                P(mtx);
                                 SM[i].swnd.unack_msgs[index].seq_no=-1;
                                 bzero(SM[i].swnd.unack_msgs[index].message, 1024);
                                 index=(index+1)%SEND_BUFFER_SIZE;
                                 SM[i].swnd.window_start=index;
                                 SM[i].swnd.wndsize++;
-                                V(mtx);
                             }
                         }
+                        V(mtx);
 
                         break;
                     }
@@ -154,6 +158,7 @@ void *receiver(void *arg) {
                         //null the string
                         int index;
 
+                        P(mtx);
                         if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
                             printf("In case 1\n");
                             index=SM[i].rwnd.window_start;
@@ -161,7 +166,6 @@ void *receiver(void *arg) {
 
                             while(1){
                                 if(SM[i].rwnd.exp_msgs[index].seq_no == seq_num){
-                                    P(mtx);
                                     strcpy(SM[i].rwnd.exp_msgs[index].message, msg);
                                     printf("Writing to SM[%d].rwnd.exp_msgs[%d].message = %s\n", i, index, SM[i].rwnd.exp_msgs[index].message);
                                     if(next_seq==seq_num){
@@ -182,16 +186,20 @@ void *receiver(void *arg) {
                                 }
                                 
                                 index=(index+1)%RECV_BUFFER_SIZE;
-                                if(index==SM[i].rwnd.window_start) break;
+
+                                if(index==SM[i].rwnd.window_start) {
+                                    V(mtx);
+                                    break;
+                                }
                             }
 
-                        }else{
+                        }
+                        else {
                             index=(SM[i].rwnd.window_end+1)%RECV_BUFFER_SIZE;
                             int next_seq=SM[i].rwnd.exp_msgs[index].seq_no;
 
                             while(index!=SM[i].rwnd.window_start){
                                 if(SM[i].rwnd.exp_msgs[index].seq_no == seq_num){
-                                    P(mtx);
                                     strcpy(SM[i].rwnd.exp_msgs[index].message, msg);
                                     printf("Writing to SM[%d].rwnd.exp_msgs[%d].message = %s\n", i, index, SM[i].rwnd.exp_msgs[index].message);
                                     
@@ -208,6 +216,7 @@ void *receiver(void *arg) {
                                             index=(index+1)%RECV_BUFFER_SIZE;
                                         }
                                     }
+
                                     V(mtx);
                                     break;
                                 }
@@ -219,6 +228,7 @@ void *receiver(void *arg) {
 
                         // send ACK in proper format: "<last_inorder_seq>:<rwnd_size>:ACK"
                         int last_seq_no;
+                        P(mtx);
                         if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
                             last_seq_no=(SM[i].rwnd.curr_seq_no-RECV_BUFFER_SIZE-1+16)%16;
                             if(last_seq_no==0) last_seq_no++;
@@ -230,7 +240,7 @@ void *receiver(void *arg) {
                         sprintf(ack, "%d:%d:ACK", last_seq_no, SM[i].rwnd.wndsize);
 
                         sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
-
+                        V(mtx);
                         break;
                     }   
                         
@@ -242,20 +252,38 @@ void *receiver(void *arg) {
         {  
             printf("No data within %d seconds.\n", T);
             // see if any of the 'nospace's can be updated
+            P(mtx);
             for(int i=0; i<N; i++)
             {
                 if(SM[i].free == 0 && SM[i].nospace == 1)
                 {
                     if(SM[i].rwnd.wndsize > 0)
                     {
-                        P(mtx);
                         SM[i].nospace = 0;
-                        V(mtx);
+                        // send duplicate ACK with updated rwnd size
+                        int last_seq_no;
+                        // todo: check this
+                        if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
+                            last_seq_no=(SM[i].rwnd.curr_seq_no-RECV_BUFFER_SIZE-1+16)%16;
+                            if(last_seq_no==0) last_seq_no++;
+                        }else last_seq_no=SM[i].rwnd.exp_msgs[SM[i].rwnd.window_end].seq_no;
+
+                        int index=SM[i].rwnd.window_end;
+                        char ack[1024];
+                        bzero(ack, 1024);
+                        sprintf(ack, "%d:%d:ACK", last_seq_no, SM[i].rwnd.wndsize);
+
+                        struct sockaddr_in cliaddr;
+                        cliaddr.sin_family = AF_INET;
+                        cliaddr.sin_port = htons(SM[i].port);
+                        inet_aton(SM[i].ip, &cliaddr.sin_addr);
+                        int len = sizeof(cliaddr);
+
+                        sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, len);
                     }
                 }
             }
-
-            // todo: re-send ACK with updated rwnd size
+            V(mtx);
         }
     }
 }
@@ -346,6 +374,7 @@ void *sender(void* arg) {
                     SM[i].swnd.window_end=0;
                     printf("Sending message!!! %s\n", SM[i].swnd.unack_msgs[0].message);
                     sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[0].message, strlen(SM[i].swnd.unack_msgs[0].message), 0, (struct sockaddr *)&cliaddr, len);
+                    printf("Sent to %s:%d, i=%d\n", SM[i].ip, SM[i].port, i);
                     SM[i].swnd.timestamp = time(NULL);
                     already_sent++;
 

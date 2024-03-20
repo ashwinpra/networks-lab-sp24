@@ -72,6 +72,6 @@ int m_sendto(int sockfd, char* buf, size_t len, int flags, const struct sockaddr
 int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen);
 int m_close(int sockfd);
 
-int dropMessage(float p);
+int dropMessage(float P);
 
 #endif

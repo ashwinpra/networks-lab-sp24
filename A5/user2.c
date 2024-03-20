@@ -33,18 +33,41 @@ int main(int argc, char const *argv[])
 
     char buf[1024];
 
-    while(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){    
-        printf("1: Not received yet\n");
+    // while(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){    
+    //     printf("1: Not received yet\n");
+    // }
+
+    // // printf("Received now!\n");
+    // printf("\nReceived: %s\n\n", buf);
+
+    // while(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){    
+    //     printf("2: Not received yet\n");
+    // }
+
+    // printf("\nReceived: %s\n", buf);
+
+    // receive the file from user1
+    FILE *fp = fopen("test2.txt", "w");
+    if(fp == NULL){
+        perror("fopen failed");
+        return -1;
     }
 
-    // printf("Received now!\n");
-    printf("\nReceived: %s\n\n", buf);
-
-    while(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){    
-        printf("2: Not received yet\n");
+    while(1) {
+        if(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){    
+            printf("Not received yet\n");
+        }
+        else {
+            printf("\nReceived: %s\n", buf);
+            if(strcmp(buf, "EOF") == 0){
+                break;
+            }
+            fprintf(fp, "%s", buf);
+            printf("Written to file\n");
+        }
     }
 
-    printf("\nReceived: %s\n", buf);
+
 
     m_close(sockfd);
 

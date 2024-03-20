@@ -31,31 +31,54 @@ int main(int argc, char const *argv[])
 
     // printf("Bind done!\n");
 
-    strcpy(buf, "Hello from user1");
+    // strcpy(buf, "Hello from user1");
 
+    // if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
+    //     perror("sendto failed");
+    //     return -1;
+    // }
+
+    // printf("Sent 1!\n");
+
+    // // sleep(10);
+
+    // strcpy(buf, "Hello again from user1");
+
+    // if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
+    //     perror("sendto failed");
+    //     return -1;
+    // }
+
+    // printf("Sent 2!\n");
+
+    FILE *fp = fopen("test.txt", "r");
+    if(fp == NULL){
+        perror("fopen failed");
+        return -1;
+    }
+
+    while(fgets(buf, 1024, fp) != NULL){
+        if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
+            perror("sendto failed");
+            return -1;
+        }
+        printf("Sent: %s\n", buf);
+    }
+
+    strcpy(buf, "EOF");
     if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
         perror("sendto failed");
         return -1;
     }
+    printf("Sent: %s\n", buf);
 
-    printf("Sent 1!\n");
-
-    sleep(10);
-
-    strcpy(buf, "Hello again from user1");
-
-    if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
-        perror("sendto failed");
-        return -1;
-    }
-
-    sleep(10);
+    sleep(30);
     
     m_close(sockfd);
 
     printf("Closed!");
 
-    sleep(20);
+    sleep(10);
 
     return 0;
 }

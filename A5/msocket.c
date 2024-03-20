@@ -97,6 +97,7 @@ int m_socket(int domain, int type, int protocol) {
     SM[freeidx].swnd.window_end = -1;
     for(int i=0;i<SEND_BUFFER_SIZE;i++){
         SM[freeidx].swnd.unack_msgs[i].seq_no = -1;
+        // printf("i=%d | SM[%d].swnd.unack_msgs[i].seq_no=%d\n", i, freeidx, SM[freeidx].swnd.unack_msgs[i].seq_no);
     }
 
     SM[freeidx].rwnd.wndsize = RECV_BUFFER_SIZE;
@@ -204,12 +205,16 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
         return -1;
     }
 
+    for(int i=0;i<10;i++){
+        printf("i=%d | msocket[%d].swnd.unack_msgs[i].seq_no=%d\n", i, sockfd, msocket[sockfd].swnd.unack_msgs[i].seq_no);
+    }
+
     // todo: check this
     int index=(msocket[sockfd].swnd.window_end+1)%SEND_BUFFER_SIZE;
     // printf("index = %d, window_start=%d\n", index, msocket[sockfd].swnd.window_start);
     // int curr_seq_no=(msocket[sockfd].swnd.unack_msgs[msocket[sockfd].swnd.window_end].seq_no+1)%15;
     while(1){
-        printf("index=%d, seq_no=%d\n", index, msocket[sockfd].swnd.unack_msgs[index].seq_no);
+        // printf("sockfd=%d | index=%d, seq_no=%d\n", sockfd, index, msocket[sockfd].swnd.unack_msgs[index].seq_no);
         if(msocket[sockfd].swnd.unack_msgs[index].seq_no == -1){
             printf("Found empty slot\n");
             sprintf(msocket[sockfd].swnd.unack_msgs[index].message, "%d:%s", msocket[sockfd].swnd.curr_seq_no, 
@@ -217,6 +222,7 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
             P(mtx);
             printf("Sending message: %s\n", msocket[sockfd].swnd.unack_msgs[index].message);
             msocket[sockfd].swnd.unack_msgs[index].seq_no = msocket[sockfd].swnd.curr_seq_no;
+            printf("Updated index %d ka seq_no = %d\n", index, msocket[sockfd].swnd.unack_msgs[index].seq_no);
             msocket[sockfd].swnd.curr_seq_no=((msocket[sockfd].swnd.curr_seq_no)%15)+1;
             printf("Updated curr_seq_no = %d\n", msocket[sockfd].swnd.curr_seq_no);
             msocket[sockfd].swnd.wndsize--;
@@ -298,10 +304,12 @@ int m_close(int sockfd)
     SM[sockfd].free = 1;
     V(mtx);
 
+    printf("Closing socket %d\n", sockfd);
+
     return 0;
 }
 
-int dropMessage(float p){
+int dropMessage(float P){
     float r = (float)rand()/(float)(RAND_MAX);
     if(r<p){
         return 1;
