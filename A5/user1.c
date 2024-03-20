@@ -57,13 +57,16 @@ int main(int argc, char const *argv[])
         return -1;
     }
 
-    while(fgets(buf, 1024, fp) != NULL){
+    while(fgets(buf, 1020, fp) != NULL){
         if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
             perror("sendto failed");
             return -1;
         }
         printf("Sent: %s\n", buf);
     }
+
+
+  
 
     strcpy(buf, "EOF");
     if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){

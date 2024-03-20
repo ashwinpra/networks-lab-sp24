@@ -215,7 +215,7 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
     // int curr_seq_no=(msocket[sockfd].swnd.unack_msgs[msocket[sockfd].swnd.window_end].seq_no+1)%15;
     while(1){
         // printf("sockfd=%d | index=%d, seq_no=%d\n", sockfd, index, msocket[sockfd].swnd.unack_msgs[index].seq_no);
-        if(msocket[sockfd].swnd.unack_msgs[index].seq_no == -1){
+        if(msocket[sockfd].swnd.unack_msgs[index].seq_no <= -1){
             printf("Found empty slot\n");
             sprintf(msocket[sockfd].swnd.unack_msgs[index].message, "%d:%s", msocket[sockfd].swnd.curr_seq_no, 
             buf);
@@ -230,8 +230,10 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
             return strlen(buf);
         }
         index=(index+1)%SEND_BUFFER_SIZE;
+        if(index==msocket[sockfd].swnd.window_start){
+            break;
+        }
     }
-  
 
     return 0;
 }
@@ -252,6 +254,7 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
     bzero(buf, len);
     int index=(msocket[sockfd].rwnd.window_start)%RECV_BUFFER_SIZE;
     printf("checking for message in msocket[%d].rwnd.exp_msgs[%d].message\n", sockfd, index);
+    printf("window size = %d\n", msocket[sockfd].rwnd.wndsize);
     if(msocket[sockfd].rwnd.exp_msgs[index].message[0] != '\0'){
         // printf("Writing to buf now\n");
         sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[index].message);
@@ -261,6 +264,7 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
         msocket[sockfd].rwnd.curr_seq_no=((msocket[sockfd].rwnd.curr_seq_no)%15)+1;
         bzero(msocket[sockfd].rwnd.exp_msgs[index].message, 1024);
         msocket[sockfd].rwnd.wndsize++;
+        printf("recvfrom: msocket[%d].rwnd.wndsize = %d\n", sockfd, msocket[sockfd].rwnd.wndsize);
         msocket[sockfd].rwnd.window_start = (msocket[sockfd].rwnd.window_start+1)%RECV_BUFFER_SIZE;
         V(mtx);
 
@@ -309,6 +313,7 @@ int m_close(int sockfd)
 
 int dropMessage(float P){
     float r = (float)rand()/(float)(RAND_MAX);
+    printf("r= %f, p=%f\n", r, P);
     if(r<p){
         return 1;
     }

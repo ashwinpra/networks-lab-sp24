@@ -3,6 +3,8 @@
 #include<string.h> 
 #include<msocket.h>
 #include<unistd.h>
+#include<sys/fcntl.h>
+#include <sys/select.h>
 
 // this will run on port 8081, and talk to user 1 on port 8080
 int main(int argc, char const *argv[])
@@ -53,9 +55,16 @@ int main(int argc, char const *argv[])
         return -1;
     }
 
+    fd_set readfds;
+    FD_SET(sockfd, &readfds);
+    
+    
+    
+
     while(1) {
         if(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){    
             printf("Not received yet\n");
+            while(1);
         }
         else {
             printf("\nReceived: %s\n", buf);
