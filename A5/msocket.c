@@ -33,8 +33,9 @@ int m_socket(int domain, int type, int protocol) {
     mtx = semget(key3, 1, 0777|IPC_CREAT);
     
     int freeidx = -1;
+    P(mtx);
     for (int i = 0; i < N; i++)
-    {
+    {   
         if (SM[i].free == 1)
         {
             freeidx = i;
@@ -45,10 +46,10 @@ int m_socket(int domain, int type, int protocol) {
     if (freeidx == -1)
     {
         errno = ENOBUFS;
+        V(mtx);
         return -1;
     }
     
-    P(mtx);
     SM[freeidx].free = 0;
     SM[freeidx].pid = getpid();
     V(mtx);
@@ -96,6 +97,7 @@ int m_socket(int domain, int type, int protocol) {
     SM[freeidx].swnd.window_end = -1;
     for(int i=0;i<SEND_BUFFER_SIZE;i++){
         SM[freeidx].swnd.unack_msgs[i].seq_no = -1;
+        // printf("i=%d | SM[%d].swnd.unack_msgs[i].seq_no=%d\n", i, freeidx, SM[freeidx].swnd.unack_msgs[i].seq_no);
     }
 
     SM[freeidx].rwnd.wndsize = RECV_BUFFER_SIZE;
@@ -109,14 +111,13 @@ int m_socket(int domain, int type, int protocol) {
 
     V(mtx);
 
-    printf("SOCKET CREATED\n");
-    printf("sockinfo->sockid=%d, sockinfo->port=%d, sockinfo->IP=%s\n", sockinfo->sockid, sockinfo->port, sockinfo->IP);
+    // printf("sockinfo->sockid=%d, sockinfo->port=%d, sockinfo->IP=%s\n", sockinfo->sockid, sockinfo->port, sockinfo->IP);
 
     return freeidx;
 }
 
 int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port) {
-    printf("Bind called\n");
+    // printf("Bind called\n");
     /*Find the corresponding actual UDP socket id from the SM table. 
     Put the UDP socket ID, IP, and port in SOCK_INFO table. Signal Sem1. 
     Then wait on Sem2. On being woken, checks sock_id field of SOCK_INFO. 
@@ -144,16 +145,10 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
     SOCK_INFO *sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
     
-    struct sockaddr_in src_addr;
-    src_addr.sin_family = AF_INET;
-    src_addr.sin_port = htons(src_port);
-    src_addr.sin_addr.s_addr = inet_addr(src_ip);
-
     P(mtx);
     sockinfo->sockid = SM[sockfd].udpsockfd;
-    sockinfo->port = dest_port;
-    strcpy(sockinfo->IP, dest_ip);
-    // sockinfo->IP = dest_ip;
+    sockinfo->port = src_port;
+    strcpy(sockinfo->IP, src_ip);
 
     V(semid1);
     V(mtx);
@@ -186,7 +181,7 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
 }
 
 int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen) {
-    printf("Sendto called!\n");
+    // printf("Sendto called!\n");
     key_t key = ftok("msocket.h", 99);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
     msocket_t *msocket = (msocket_t *)shmat(shmid, 0, 0);
@@ -197,8 +192,6 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
     mtx = semget(key3, 1, 0777|IPC_CREAT);
 
     int dest_port = ntohs(((struct sockaddr_in *)dest_addr)->sin_port);
-
-    printf("port = %d\n", dest_port);
     
     if(msocket[sockfd].port != dest_port || strcmp(msocket[sockfd].ip, inet_ntoa(((struct sockaddr_in *)dest_addr)->sin_addr))!=0 ){
         errno = ENOTBOUND;
@@ -212,24 +205,31 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
         return -1;
     }
 
+    for(int i=0;i<10;i++){
+        printf("i=%d | msocket[%d].swnd.unack_msgs[i].seq_no=%d\n", i, sockfd, msocket[sockfd].swnd.unack_msgs[i].seq_no);
+    }
+
     // todo: check this
     int index=(msocket[sockfd].swnd.window_end+1)%SEND_BUFFER_SIZE;
-    printf("index = %d, window_start=%d", index, msocket[sockfd].swnd.window_start);
+    // printf("index = %d, window_start=%d\n", index, msocket[sockfd].swnd.window_start);
     // int curr_seq_no=(msocket[sockfd].swnd.unack_msgs[msocket[sockfd].swnd.window_end].seq_no+1)%15;
     while(1){
-        printf("index=%d, seq_no=%d\n", index, msocket[sockfd].swnd.unack_msgs[index].seq_no);
+        // printf("sockfd=%d | index=%d, seq_no=%d\n", sockfd, index, msocket[sockfd].swnd.unack_msgs[index].seq_no);
         if(msocket[sockfd].swnd.unack_msgs[index].seq_no == -1){
-            sprintf(msocket[sockfd].swnd.unack_msgs[index].message, "%d:%s", msocket[sockfd].swnd.curr_seq_no, buf);
+            printf("Found empty slot\n");
+            sprintf(msocket[sockfd].swnd.unack_msgs[index].message, "%d:%s", msocket[sockfd].swnd.curr_seq_no, 
+            buf);
             P(mtx);
-            printf("Sending message %d: %s\n", msocket[sockfd].swnd.curr_seq_no, msocket[sockfd].swnd.unack_msgs[index].message);
+            printf("Sending message: %s\n", msocket[sockfd].swnd.unack_msgs[index].message);
             msocket[sockfd].swnd.unack_msgs[index].seq_no = msocket[sockfd].swnd.curr_seq_no;
-            msocket[sockfd].swnd.curr_seq_no=((msocket[sockfd].swnd.curr_seq_no+1)%15)+1;
+            printf("Updated index %d ka seq_no = %d\n", index, msocket[sockfd].swnd.unack_msgs[index].seq_no);
+            msocket[sockfd].swnd.curr_seq_no=((msocket[sockfd].swnd.curr_seq_no)%15)+1;
+            printf("Updated curr_seq_no = %d\n", msocket[sockfd].swnd.curr_seq_no);
             msocket[sockfd].swnd.wndsize--;
             V(mtx);
             return strlen(buf);
         }
         index=(index+1)%SEND_BUFFER_SIZE;
-        if(index==msocket[sockfd].swnd.window_start) break;
     }
   
 
@@ -251,25 +251,29 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
     
     bzero(buf, len);
     int index=(msocket[sockfd].rwnd.window_start)%RECV_BUFFER_SIZE;
-        if(msocket[sockfd].rwnd.exp_msgs[index].message[0] != '\0'){
+    printf("checking for message in msocket[%d].rwnd.exp_msgs[%d].message\n", sockfd, index);
+    if(msocket[sockfd].rwnd.exp_msgs[index].message[0] != '\0'){
+        // printf("Writing to buf now\n");
+        sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[index].message);
+        // printf("buf = %s\n", buf);
+        P(mtx);
+        msocket[sockfd].rwnd.exp_msgs[index].seq_no = msocket[sockfd].rwnd.curr_seq_no;
+        msocket[sockfd].rwnd.curr_seq_no=((msocket[sockfd].rwnd.curr_seq_no)%15)+1;
+        bzero(msocket[sockfd].rwnd.exp_msgs[index].message, 1024);
+        msocket[sockfd].rwnd.wndsize++;
+        msocket[sockfd].rwnd.window_start = (msocket[sockfd].rwnd.window_start+1)%RECV_BUFFER_SIZE;
+        V(mtx);
 
-            sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[index].message);
+        // printf("All done here\n");
 
-            P(mtx);
-            msocket[sockfd].rwnd.exp_msgs[index].seq_no = msocket[sockfd].rwnd.curr_seq_no;
-            msocket[sockfd].rwnd.curr_seq_no=((msocket[sockfd].rwnd.curr_seq_no+1)%15)+1;
-            bzero(msocket[sockfd].rwnd.exp_msgs[index].message, 1024);
-            msocket[sockfd].rwnd.wndsize++;
-            msocket[sockfd].rwnd.window_start = (msocket[sockfd].rwnd.window_start+1)%RECV_BUFFER_SIZE;
-            V(mtx);
+        struct sockaddr_in *src = (struct sockaddr_in *)src_addr;
+        src->sin_family = AF_INET;
+        src->sin_port = htons(msocket[sockfd].port);
+        src->sin_addr.s_addr = inet_addr(msocket[sockfd].ip);        
 
-            struct sockaddr_in *src = (struct sockaddr_in *)src_addr;
-            src->sin_family = AF_INET;
-            src->sin_port = htons(msocket[sockfd].port);
-            src->sin_addr.s_addr = inet_addr(msocket[sockfd].ip);
-            *addrlen = sizeof(*src);
-            return strlen(buf);
-        }
+        printf("recv done!\n");
+        return strlen(buf);
+    }
         
         else{
             errno = ENOMSG;
@@ -281,29 +285,32 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
 
 int m_close(int sockfd)
 {
-    key_t key = ftok("msocket.h", 99);
-    int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
-    msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
-
     int mtx; 
     struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};
     key_t key3=ftok("msocket.h", 103);
     mtx = semget(key3, 1, 0777|IPC_CREAT);
+    
+    key_t key = ftok("msocket.h", 99);
+    int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
+    msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
 
+    key_t key_sockinfo=ftok("msocket.h", 100);
+    int shmid_sockinfo = shmget(key_sockinfo, sizeof(SOCK_INFO), 0666 | IPC_CREAT);
+    SOCK_INFO *sockinfo = (SOCK_INFO *)shmat(shmid_sockinfo, 0, 0);
 
-    for (int i = 0; i < N; i++)
-    {
-        if (SM[i].pid == getpid())
-        {   
-            P(mtx);
-            SM[i].free = 1;
-            if(close(SM[i].udpsockfd) == -1) {
-                V(mtx);
-                return -1;
-            }
-            V(mtx);
-            return 0;
-        }
+    P(mtx);
+    SM[sockfd].free = 1;
+    V(mtx);
+
+    printf("Closing socket %d\n", sockfd);
+
+    return 0;
+}
+
+int dropMessage(float P){
+    float r = (float)rand()/(float)(RAND_MAX);
+    if(r<p){
+        return 1;
     }
-    return -1;
+    return 0;
 }

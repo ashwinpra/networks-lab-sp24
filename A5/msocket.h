@@ -37,11 +37,11 @@ typedef struct{
 
 typedef struct {
     packet_t unack_msgs[SEND_BUFFER_SIZE]; // sequence number of messages sent but not yet acknowledged
-    int wndsize;    // window size indicating max number of messages that can be sent without receiving ACK 
+    int wndsize;    
     int window_start;
     int window_end;
     int curr_seq_no;
-    int recv_wndsize;
+    int recv_wndsize; // window size indicating max number of messages that can be sent without receiving ACK 
     time_t timestamp;
 } swnd_t; 
 
@@ -71,5 +71,7 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
 int m_sendto(int sockfd, char* buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);
 int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen);
 int m_close(int sockfd);
+
+int dropMessage(float P);
 
 #endif
