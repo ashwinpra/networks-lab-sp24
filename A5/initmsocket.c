@@ -16,7 +16,7 @@
 
 SOCK_INFO* sockinfo;
 struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};
-int semid1, semid2, mtx;
+int semid1, semid2, mtx, ack_mtx;
 
 
 void *receiver(void *arg) {
@@ -102,13 +102,16 @@ void *receiver(void *arg) {
                     // handle separately if its ack
                     if (strcmp(buf + n - 3, "ACK") == 0)
                     {   
-
+                        printf("ACK received: [%s]\n", buf);
                         int last_inorder_seq = atoi(strtok(buf, ":"));
                         int rwnd_size = atoi(strtok(NULL, ":"));
                         printf("ACK last_inorder_seq = %d, rwnd_size = %d\n", last_inorder_seq, rwnd_size);
                         P(mtx);
                         SM[i].swnd.recv_wndsize = rwnd_size;
                         V(mtx);
+                        printf("Updated recv_wndsize to %d\n", rwnd_size);
+                        if(SM[i].swnd.recv_wndsize == 0) SM[i].nospace = 1;
+                        // V(ack_mtx);
 
                         //! case 1: ack = start, then fine, move window by 1 
                         //! case 2: ack is somewhere between start to end - move window completely 
@@ -240,9 +243,10 @@ void *receiver(void *arg) {
                         char ack[1024];
                         bzero(ack, 1024);
                         sprintf(ack, "%d:%d:ACK", last_seq_no, SM[i].rwnd.wndsize);
-
                         sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
                         V(mtx);
+                        //  P(ack_mtx);
+                        printf("ACK done\n");
                         break;
                     }   
                         
@@ -255,6 +259,7 @@ void *receiver(void *arg) {
             printf("No data within %d seconds.\n", T);
             // see if any of the 'nospace's can be updated
             P(mtx);
+            // printf("Lock acquired\n");
             for(int i=0; i<N; i++)
             {
                 if(SM[i].free == 0 && SM[i].nospace == 1)
@@ -263,6 +268,7 @@ void *receiver(void *arg) {
                     {
                         SM[i].nospace = 0;
                         // send duplicate ACK with updated rwnd size
+                        printf("This dude has space now!!\n");
                         int last_seq_no;
                         // todo: check this
                         if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
@@ -274,6 +280,7 @@ void *receiver(void *arg) {
                         char ack[1024];
                         bzero(ack, 1024);
                         sprintf(ack, "%d:%d:ACK", last_seq_no, SM[i].rwnd.wndsize);
+                        printf("Sending ack: [%s]\n", ack);
 
                         struct sockaddr_in cliaddr;
                         cliaddr.sin_family = AF_INET;
@@ -282,10 +289,14 @@ void *receiver(void *arg) {
                         int len = sizeof(cliaddr);
 
                         sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, len);
+                        // P(ack_mtx);
+                        printf("ACK done\n");
+                        
                     }
                 }
             }
             V(mtx);
+            // printf("Lock released\n");
         }
     }
 }
@@ -347,14 +358,14 @@ void *sender(void* arg) {
                                     printf("Sending message! %s\n", SM[i].swnd.unack_msgs[index].message);
                                     int x=sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[index].message, strlen(SM[i].swnd.unack_msgs[index].message), 0, (struct sockaddr *)&cliaddr, len);
                                     printf("x=%d\n", x);
-                                    printf("here\n");
+                                    printf("here1\n");
                                     P(mtx);
                                     
                                     if(j==0) SM[i].swnd.timestamp = curr_time;
                                     curr_seq_no=((curr_seq_no)%15)+1;
                                     SM[i].swnd.window_end=index;
                                     V(mtx);
-                                    printf("here\n");
+                                    printf("here2\n");
                                 }
                                 
                                 else break;
@@ -455,14 +466,17 @@ int main()
     key_t key1=ftok("msocket.h", 101);
     key_t key2=ftok("msocket.h", 102);
     key_t key3=ftok("msocket.h", 103);
+    key_t key4=ftok("msocket.h", 104);
     
     semid1 = semget(key1, 1, 0777|IPC_CREAT);
     semid2 = semget(key2, 1, 0777|IPC_CREAT);
     mtx = semget(key3, 1, 0777|IPC_CREAT);
+    ack_mtx = semget(key4, 1, 0777|IPC_CREAT);
     
     semctl(semid1, 0, SETVAL, 0);
     semctl(semid2, 0, SETVAL, 0);
     semctl(mtx, 0, SETVAL, 1);
+    semctl(ack_mtx, 0, SETVAL, 0);
 
     //shared memory
     key_t key_sockinfo=ftok("msocket.h", 100);
@@ -497,7 +511,7 @@ int main()
     pthread_t R, S, G;
     pthread_create(&R, &attr, receiver, (void *)shmid);          // to handle receiving messages
     pthread_create(&S, &attr, sender, (void *)shmid);            // to handle sending messages
-    // pthread_create(&G, &attr, garbage_collector, (void *)shmid); // to handle garbage collection
+    pthread_create(&G, &attr, garbage_collector, (void *)shmid); // to handle garbage collection
 
     while(1){
         //wait on Sem1
