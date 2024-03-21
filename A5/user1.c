@@ -56,26 +56,42 @@ int main(int argc, char const *argv[])
         perror("fopen failed");
         return -1;
     }
+    int count=1;
+    char buf1[1024];
 
-    while(fgets(buf, 1020, fp) != NULL){
+    while(fgets(buf, 1015, fp) != NULL){
+        // bzero(buf1, 1024);
+        // sprintf(buf1, "%s", buf);
+        while(1){
         if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
             perror("sendto failed");
-            return -1;
+            sleep(7);
+            continue;
         }
-        printf("Sent: %s\n", buf);
+        // printf("Sent: %s\n", buf1);
+        printf("count = %d\n", count);
+        count++;
+        break;
+        }
+        
     }
 
 
   
 
     strcpy(buf, "EOF");
+    while(1){
     if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
         perror("sendto failed");
-        return -1;
+        sleep(7);
+        continue;
     }
     printf("Sent: %s\n", buf);
+    printf("coutn = %d\n", count);
+    break;
+    }
 
-    sleep(120);
+    sleep(1000);
     
     m_close(sockfd);
 

@@ -99,7 +99,7 @@ int m_socket(int domain, int type, int protocol) {
     for(int i=0;i<RECV_BUFFER_SIZE;i++){
         SM[freeidx].rwnd.exp_msgs[i].seq_no = i+1;
     }
-    SM[freeidx].rwnd.curr_seq_no = 1;
+    SM[freeidx].rwnd.curr_seq_no = 6;
     SM[freeidx].nospace = 0;
 
     V(mtx);
@@ -195,12 +195,13 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
 
     if(msocket[sockfd].swnd.wndsize==0){
         errno = ENOBUFS;
+        perror("No space in send buffer\n");
         return -1;
     }
 
-    for(int i=0;i<10;i++){
-        printf("i=%d | msocket[%d].swnd.unack_msgs[i].seq_no=%d\n", i, sockfd, msocket[sockfd].swnd.unack_msgs[i].seq_no);
-    }
+    // for(int i=0;i<10;i++){
+    //     printf("i=%d | msocket[%d].swnd.unack_msgs[i].seq_no=%d\n", i, sockfd, msocket[sockfd].swnd.unack_msgs[i].seq_no);
+    // }
 
     // todo: check this
     int index=(msocket[sockfd].swnd.window_end+1)%SEND_BUFFER_SIZE;
@@ -209,15 +210,15 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
     while(1){
         // printf("sockfd=%d | index=%d, seq_no=%d\n", sockfd, index, msocket[sockfd].swnd.unack_msgs[index].seq_no);
         if(msocket[sockfd].swnd.unack_msgs[index].seq_no <= -1){
-            printf("Found empty slot\n");
+            // printf("Found empty slot\n");
             sprintf(msocket[sockfd].swnd.unack_msgs[index].message, "%d:%s", msocket[sockfd].swnd.curr_seq_no, 
             buf);
             P(mtx);
-            printf("Sending message: %s\n", msocket[sockfd].swnd.unack_msgs[index].message);
+            // printf("Sending message: %s\n", msocket[sockfd].swnd.unack_msgs[index].message);
             msocket[sockfd].swnd.unack_msgs[index].seq_no = msocket[sockfd].swnd.curr_seq_no;
-            printf("Updated index %d ka seq_no = %d\n", index, msocket[sockfd].swnd.unack_msgs[index].seq_no);
+            // printf("Updated index %d ka seq_no = %d\n", index, msocket[sockfd].swnd.unack_msgs[index].seq_no);
             msocket[sockfd].swnd.curr_seq_no=((msocket[sockfd].swnd.curr_seq_no)%15)+1;
-            printf("Updated curr_seq_no = %d\n", msocket[sockfd].swnd.curr_seq_no);
+            // printf("Updated curr_seq_no = %d\n", msocket[sockfd].swnd.curr_seq_no);
             msocket[sockfd].swnd.wndsize--;
             V(mtx);
             return strlen(buf);
@@ -246,13 +247,12 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
     
     bzero(buf, len);
     int index=(msocket[sockfd].rwnd.window_start)%RECV_BUFFER_SIZE;
-    printf("checking for message in msocket[%d].rwnd.exp_msgs[%d].message\n", sockfd, index);
-    printf("window size = %d\n", msocket[sockfd].rwnd.wndsize);
-    printf("start = %d, end = %d\n", msocket[sockfd].rwnd.window_start, msocket[sockfd].rwnd.window_end);
+    // printf("checking for message in msocket[%d].rwnd.exp_msgs[%d].message\n", sockfd, index);
+    // printf("window size = %d\n", msocket[sockfd].rwnd.wndsize);
+    // printf("start = %d, end = %d\n", msocket[sockfd].rwnd.window_start, msocket[sockfd].rwnd.window_end);
     if(msocket[sockfd].rwnd.exp_msgs[index].message[0] != '\0'){
-        printf("Writing to buf now\n");
+        // printf("Writing to buf now\n");
         sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[index].message);
-        printf("buf = %s\n", buf);
         P(mtx);
         printf("Lock acquired\n");
         msocket[sockfd].rwnd.exp_msgs[index].seq_no = msocket[sockfd].rwnd.curr_seq_no;

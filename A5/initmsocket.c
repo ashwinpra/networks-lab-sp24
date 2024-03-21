@@ -80,6 +80,7 @@ void *receiver(void *arg) {
                     char buf[1024];
                     bzero(buf, 1024);
                     int n = recvfrom(SM[i].udpsockfd, buf, 1024, 0, (struct sockaddr *)&cliaddr, &len);
+                    buf[n]='\0';
                     if (n == -1)
                     {
                         perror("recvfrom()");
@@ -109,8 +110,8 @@ void *receiver(void *arg) {
                         // P(mtx);
                         SM[i].swnd.recv_wndsize = rwnd_size;
                         V(mtx);
-                        printf("Updated recv_wndsize to %d\n", rwnd_size);
-                        if(SM[i].swnd.recv_wndsize == 0) SM[i].nospace = 1;
+                        printf("Updated %d recv_wndsize to %d\n", i, rwnd_size);
+                        // if(SM[i].swnd.recv_wndsize == 0) SM[i].nospace = 1;
                         // V(ack_mtx);
 
                         //! case 1: ack = start, then fine, move window by 1 
@@ -123,6 +124,8 @@ void *receiver(void *arg) {
                         while(1){
                             count++;
                             // P(mtx);
+                            printf("SM[i].swnd.unack_msgs[%d].seq_no = %d\n", index, SM[i].swnd.unack_msgs[index].seq_no);
+                            printf("last_inorder_seq = %d\n", last_inorder_seq);
                             if(SM[i].swnd.unack_msgs[index].seq_no == last_inorder_seq){
                                 // SM[j].swnd.window_start=(index+count)%SEND_BUFFER_SIZE;
                                 // SM[j].swnd.wndsize+=count;
@@ -130,7 +133,7 @@ void *receiver(void *arg) {
                                 V(mtx);
                                 break;
                             }
-                            if(index==SM[i].swnd.window_end) break;
+                            if(index==SM[i].swnd.window_end ) break;
                             index=(index+1)%SEND_BUFFER_SIZE;
                             V(mtx);
                             printf("Broke\n");
@@ -233,9 +236,11 @@ void *receiver(void *arg) {
 
                         // send ACK in proper format: "<last_inorder_seq>:<rwnd_size>:ACK"
                         int last_seq_no;
-                        sleep(5);
+                        // sleep(5);
                         // P(mtx);
                         if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
+                            printf("window start = %d, window end = %d\n", SM[i].rwnd.window_start, SM[i].rwnd.window_end);
+                            printf("curr seq no = %d\n", SM[i].rwnd.exp_msgs[SM[i].rwnd.window_end].seq_no);
                             last_seq_no=(SM[i].rwnd.curr_seq_no-RECV_BUFFER_SIZE-1+16)%16;
                             if(last_seq_no==0) last_seq_no++;
                         }else last_seq_no=SM[i].rwnd.exp_msgs[SM[i].rwnd.window_end].seq_no;
@@ -244,6 +249,7 @@ void *receiver(void *arg) {
                         char ack[1024];
                         bzero(ack, 1024);
                         sprintf(ack, "%d:%d:ACK", last_seq_no, SM[i].rwnd.wndsize);
+                        if(SM[i].rwnd.wndsize==0) SM[i].nospace=1;
                         sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
                         V(mtx);
                         //  P(ack_mtx);
@@ -269,10 +275,19 @@ void *receiver(void *arg) {
                     {
                         SM[i].nospace = 0;
                         // send duplicate ACK with updated rwnd size
-                        printf("This dude has space now!!\n");
+                        // printf("This dude %d has space now!!\n",i);
                         int last_seq_no;
                         // todo: check this
-                        last_seq_no=SM[i].rwnd.exp_msgs[SM[i].rwnd.window_end].seq_no;
+                        // printf("window start = %d, window end = %d\n", SM[i].rwnd.window_start, SM[i].rwnd.window_end);
+                        for(int k=0;k<RECV_BUFFER_SIZE;k++){
+                            // printf("SM[%d].rwnd.exp_msgs[%d].seq_no = %d, ", i, k, SM[i].rwnd.exp_msgs[k].seq_no);
+                        }printf("\n");
+                        if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
+                            // printf("window start = %d, window end = %d\n", SM[i].rwnd.window_start, SM[i].rwnd.window_end);
+                            // printf("curr seq no = %d\n", SM[i].rwnd.curr_seq_no);
+                            last_seq_no=(SM[i].rwnd.curr_seq_no-RECV_BUFFER_SIZE-1+15)%15;
+                            if(last_seq_no==0) last_seq_no=15;
+                        }else last_seq_no=SM[i].rwnd.exp_msgs[SM[i].rwnd.window_end].seq_no;
 
                         int index=SM[i].rwnd.window_end;
                         char ack[1024];
@@ -378,22 +393,24 @@ void *sender(void* arg) {
         for(int i=0; i<N; i++){
             // printf("[%d], free = %d, recv_wndsize = %d, port = %d, ip = %s\n", i, SM[i].free, SM[i].swnd.recv_wndsize, SM[i].port, SM[i].ip);
             if(SM[i].free == 0 && SM[i].swnd.recv_wndsize && SM[i].port!=0 && strcmp(SM[i].ip,"")!=0){
-                printf("Here4, i=%d, start = %d, end=%d, wndsize=%d\n", i,SM[i].swnd.window_start, SM[i].swnd.window_end, SM[i].swnd.wndsize);
+                // printf("Here4, i=%d, start = %d, end=%d, wndsize=%d\n", i,SM[i].swnd.window_start, SM[i].swnd.window_end, SM[i].swnd.wndsize);
                     if(SM[i].swnd.unack_msgs[SM[i].swnd.window_start].message[0]=='\0') break;
+
+                    printf("here right here\n");
                 struct sockaddr_in cliaddr;
                 cliaddr.sin_family = AF_INET;
                 cliaddr.sin_port = htons(SM[i].port);
                 inet_aton(SM[i].ip, &cliaddr.sin_addr);
                 int len = sizeof(cliaddr);
 
-                if(SM[i].swnd.wndsize == 0) continue; //todo: check this line
+             
                 int already_sent=0;
-                printf("start=%d, end=%d\n", SM[i].swnd.window_start, SM[i].swnd.window_end);
-                printf("start seq no= %d\n", SM[i].swnd.unack_msgs[SM[i].swnd.window_start].seq_no);
+                // printf("start=%d, end=%d\n", SM[i].swnd.window_start, SM[i].swnd.window_end);
+                // printf("start seq no= %d\n", SM[i].swnd.unack_msgs[SM[i].swnd.window_start].seq_no);
                if(SM[i].swnd.window_end!=-1) printf("end seq no= %d\n", SM[i].swnd.unack_msgs[SM[i].swnd.window_end].seq_no);
                 if(SM[i].swnd.window_end==-1 || ((((SM[i].swnd.window_end+1)%SEND_BUFFER_SIZE)==SM[i].swnd.window_start) && (((SM[i].swnd.unack_msgs[SM[i].swnd.window_end].seq_no%15)+1)==SM[i].swnd.unack_msgs[SM[i].swnd.window_start].seq_no || SM[i].swnd.unack_msgs[SM[i].swnd.window_end].seq_no==-1))){
                     SM[i].swnd.window_end=SM[i].swnd.window_start;
-                    printf("Sending message!!! %s\n", SM[i].swnd.unack_msgs[SM[i].swnd.window_start].message);
+                    // printf("Sending message!!! %s\n", SM[i].swnd.unack_msgs[SM[i].swnd.window_start].message);
                     sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[SM[i].swnd.window_start].message, strlen(SM[i].swnd.unack_msgs[SM[i].swnd.window_start].message), 0, (struct sockaddr *)&cliaddr, len);
                     printf("Sent to %s:%d, i=%d\n", SM[i].ip, SM[i].port, i);
                     SM[i].swnd.timestamp = time(NULL);
@@ -402,15 +419,15 @@ void *sender(void* arg) {
                 int j=SM[i].swnd.window_end;
                 int curr_seq_no = ((SM[i].swnd.unack_msgs[j].seq_no)%15)+1;
                 if(curr_seq_no==-1) continue;
-                printf("start=%d, end=%d, curr_seq_no=%d\n", SM[i].swnd.window_start, SM[i].swnd.window_end, curr_seq_no);
+                // printf("start=%d, end=%d, curr_seq_no=%d\n", SM[i].swnd.window_start, SM[i].swnd.window_end, curr_seq_no);
                already_sent=((SM[i].swnd.window_end<SM[i].swnd.window_start)?(SM[i].swnd.window_end+SEND_BUFFER_SIZE):SM[i].swnd.window_end)-SM[i].swnd.window_start+1;
                
-                printf("already_sent=%d\n", already_sent);
+                // printf("already_sent=%d\n", already_sent);
                 j=(j+1)%SEND_BUFFER_SIZE;
 
                 while(j!=SM[i].swnd.window_start){
                     if(SM[i].swnd.unack_msgs[j].seq_no == -1) break;
-                    printf("already_sent=%d, recv_wndsize=%d\n", already_sent, SM[i].swnd.recv_wndsize);
+                    // printf("already_sent=%d, recv_wndsize=%d\n", already_sent, SM[i].swnd.recv_wndsize);
                     if(already_sent>=SM[i].swnd.recv_wndsize) break;
                     if(SM[i].swnd.unack_msgs[j].seq_no == curr_seq_no){
                         // send message

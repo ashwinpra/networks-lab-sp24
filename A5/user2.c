@@ -58,7 +58,7 @@ int main(int argc, char const *argv[])
     fd_set readfds;
     FD_SET(sockfd, &readfds);
     
-    
+
     
     int count=0;
     while(1) {
@@ -67,13 +67,14 @@ int main(int argc, char const *argv[])
             sleep(5);
         }
         else {
-            printf("\nReceived: %s\n", buf);
+            // printf("\nReceived: %s\n", buf);
             if(strcmp(buf, "EOF") == 0){
                 break;
             }
             fprintf(fp, "%s", buf);
             printf("Written to file\n");
             count++;
+            printf("count = %d\n", count);
 
             // if(count==7) while(1);
         }
