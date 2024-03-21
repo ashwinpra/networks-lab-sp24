@@ -255,6 +255,7 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
     int index=(msocket[sockfd].rwnd.window_start)%RECV_BUFFER_SIZE;
     printf("checking for message in msocket[%d].rwnd.exp_msgs[%d].message\n", sockfd, index);
     printf("window size = %d\n", msocket[sockfd].rwnd.wndsize);
+    printf("start = %d, end = %d\n", msocket[sockfd].rwnd.window_start, msocket[sockfd].rwnd.window_end);
     if(msocket[sockfd].rwnd.exp_msgs[index].message[0] != '\0'){
         // printf("Writing to buf now\n");
         sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[index].message);

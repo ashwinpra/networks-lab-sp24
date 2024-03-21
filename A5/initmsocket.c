@@ -106,9 +106,9 @@ void *receiver(void *arg) {
                         int last_inorder_seq = atoi(strtok(buf, ":"));
                         int rwnd_size = atoi(strtok(NULL, ":"));
                         printf("ACK last_inorder_seq = %d, rwnd_size = %d\n", last_inorder_seq, rwnd_size);
-                        P(mtx);
+                        // P(mtx);
                         SM[i].swnd.recv_wndsize = rwnd_size;
-                        V(mtx);
+                        // V(mtx);
 
                         //! case 1: ack = start, then fine, move window by 1 
                         //! case 2: ack is somewhere between start to end - move window completely 
@@ -119,7 +119,7 @@ void *receiver(void *arg) {
 
                         while(1){
                             count++;
-                            P(mtx);
+                            // P(mtx);
                             if(SM[i].swnd.unack_msgs[index].seq_no == last_inorder_seq){
                                 // SM[j].swnd.window_start=(index+count)%SEND_BUFFER_SIZE;
                                 // SM[j].swnd.wndsize+=count;
@@ -129,10 +129,10 @@ void *receiver(void *arg) {
                             }
                             if(index==SM[i].swnd.window_end) break;
                             index=(index+1)%SEND_BUFFER_SIZE;
-                            V(mtx);
+                            // V(mtx);
                         }
 
-                        P(mtx);
+                        // P(mtx);
                         index=SM[i].swnd.window_start;
                         if(flag){
                             while(count--){
@@ -143,7 +143,7 @@ void *receiver(void *arg) {
                                 SM[i].swnd.wndsize++;
                             }
                         }
-                        V(mtx);
+                        // V(mtx);
 
                         break;
                     }
@@ -159,7 +159,7 @@ void *receiver(void *arg) {
                         //null the string
                         int index;
 
-                        P(mtx);
+                        // P(mtx);
                         if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
                             printf("In case 1\n");
                             index=SM[i].rwnd.window_start;
@@ -229,8 +229,8 @@ void *receiver(void *arg) {
 
                         // send ACK in proper format: "<last_inorder_seq>:<rwnd_size>:ACK"
                         int last_seq_no;
-                        // sleep(5);
-                        P(mtx);
+                        sleep(5);
+                        // P(mtx);
                         if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
                             last_seq_no=(SM[i].rwnd.curr_seq_no-RECV_BUFFER_SIZE-1+16)%16;
                             if(last_seq_no==0) last_seq_no++;
@@ -242,7 +242,7 @@ void *receiver(void *arg) {
                         sprintf(ack, "%d:%d:ACK", last_seq_no, SM[i].rwnd.wndsize);
 
                         sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
-                        V(mtx);
+                        // V(mtx);
                         break;
                     }   
                         
@@ -254,7 +254,7 @@ void *receiver(void *arg) {
         {  
             printf("No data within %d seconds.\n", T);
             // see if any of the 'nospace's can be updated
-            P(mtx);
+            // P(mtx);
             for(int i=0; i<N; i++)
             {
                 if(SM[i].free == 0 && SM[i].nospace == 1)
@@ -285,7 +285,7 @@ void *receiver(void *arg) {
                     }
                 }
             }
-            V(mtx);
+            // V(mtx);
         }
     }
 }
@@ -348,12 +348,12 @@ void *sender(void* arg) {
                                     int x=sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[index].message, strlen(SM[i].swnd.unack_msgs[index].message), 0, (struct sockaddr *)&cliaddr, len);
                                     printf("x=%d\n", x);
                                     printf("here\n");
-                                    P(mtx);
+                                    // P(mtx);
                                     
                                     if(j==0) SM[i].swnd.timestamp = curr_time;
                                     curr_seq_no=((curr_seq_no)%15)+1;
                                     SM[i].swnd.window_end=index;
-                                    V(mtx);
+                                    // V(mtx);
                                     printf("here\n");
                                 }
                                 

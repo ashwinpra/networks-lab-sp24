@@ -75,7 +75,7 @@ int main(int argc, char const *argv[])
     }
     printf("Sent: %s\n", buf);
 
-    sleep(30);
+    sleep(120);
     
     m_close(sockfd);
 

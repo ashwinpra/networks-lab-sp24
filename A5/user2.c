@@ -60,11 +60,11 @@ int main(int argc, char const *argv[])
     
     
     
-
+    int count=0;
     while(1) {
         if(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){    
             printf("Not received yet\n");
-            while(1);
+            sleep(5);
         }
         else {
             printf("\nReceived: %s\n", buf);
@@ -73,6 +73,9 @@ int main(int argc, char const *argv[])
             }
             fprintf(fp, "%s", buf);
             printf("Written to file\n");
+            count++;
+
+            // if(count==7) while(1);
         }
     }
 
