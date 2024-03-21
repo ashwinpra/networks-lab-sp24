@@ -133,6 +133,7 @@ void *receiver(void *arg) {
                             if(index==SM[i].swnd.window_end) break;
                             index=(index+1)%SEND_BUFFER_SIZE;
                             V(mtx);
+                            printf("Broke\n");
                         }
 
                         P(mtx);
@@ -271,10 +272,7 @@ void *receiver(void *arg) {
                         printf("This dude has space now!!\n");
                         int last_seq_no;
                         // todo: check this
-                        if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
-                            last_seq_no=(SM[i].rwnd.curr_seq_no-RECV_BUFFER_SIZE-1+16)%16;
-                            if(last_seq_no==0) last_seq_no++;
-                        }else last_seq_no=SM[i].rwnd.exp_msgs[SM[i].rwnd.window_end].seq_no;
+                        last_seq_no=SM[i].rwnd.exp_msgs[SM[i].rwnd.window_end].seq_no;
 
                         int index=SM[i].rwnd.window_end;
                         char ack[1024];
@@ -299,6 +297,8 @@ void *receiver(void *arg) {
             // printf("Lock released\n");
         }
     }
+
+    printf("Receiver thread done?!?!\n");
 }
 
 
@@ -376,7 +376,7 @@ void *sender(void* arg) {
 
 
         for(int i=0; i<N; i++){
-            printf("[%d], free = %d, recv_wndsize = %d, port = %d, ip = %s\n", i, SM[i].free, SM[i].swnd.recv_wndsize, SM[i].port, SM[i].ip);
+            // printf("[%d], free = %d, recv_wndsize = %d, port = %d, ip = %s\n", i, SM[i].free, SM[i].swnd.recv_wndsize, SM[i].port, SM[i].ip);
             if(SM[i].free == 0 && SM[i].swnd.recv_wndsize && SM[i].port!=0 && strcmp(SM[i].ip,"")!=0){
                 printf("Here4, i=%d, start = %d, end=%d, wndsize=%d\n", i,SM[i].swnd.window_start, SM[i].swnd.window_end, SM[i].swnd.wndsize);
                     if(SM[i].swnd.unack_msgs[SM[i].swnd.window_start].message[0]=='\0') break;

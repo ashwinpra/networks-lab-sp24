@@ -99,7 +99,7 @@ int m_socket(int domain, int type, int protocol) {
     for(int i=0;i<RECV_BUFFER_SIZE;i++){
         SM[freeidx].rwnd.exp_msgs[i].seq_no = i+1;
     }
-    SM[freeidx].rwnd.curr_seq_no = 6; // next sequence number to be added to window
+    SM[freeidx].rwnd.curr_seq_no = 1;
     SM[freeidx].nospace = 0;
 
     V(mtx);
@@ -257,6 +257,7 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
         printf("Lock acquired\n");
         msocket[sockfd].rwnd.exp_msgs[index].seq_no = msocket[sockfd].rwnd.curr_seq_no;
         msocket[sockfd].rwnd.curr_seq_no=((msocket[sockfd].rwnd.curr_seq_no)%15)+1;
+                printf("Updated curr_seq_no = %d\n", msocket[sockfd].rwnd.curr_seq_no);
         bzero(msocket[sockfd].rwnd.exp_msgs[index].message, 1024);
         msocket[sockfd].rwnd.wndsize++;
         printf("recvfrom: msocket[%d].rwnd.wndsize = %d\n", sockfd, msocket[sockfd].rwnd.wndsize);
