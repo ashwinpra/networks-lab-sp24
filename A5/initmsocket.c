@@ -33,7 +33,7 @@ void *receiver(void *arg) {
         {  
             if (SM[i].free == 0)
             {  
-                // printf("%d is free\n", i);
+                printf("%d is free\n", i);
                 FD_SET(SM[i].udpsockfd, &fds);
                 if (SM[i].udpsockfd > maxfd)
                 {
@@ -43,14 +43,14 @@ void *receiver(void *arg) {
         }
         V(mtx);
 
-        // printf("maxfd = %d\n", maxfd);
+        printf("maxfd = %d\n", maxfd);
 
         struct timeval tv;
         tv.tv_sec = T;
         tv.tv_usec = 0;
         // printf("Waiting on select\n");
         int retval = select(maxfd + 1, &fds, NULL, NULL, &tv);
-        // printf("Select done with retval = %d\n", retval);
+        printf("Select done with retval = %d\n", retval);
 
         if (retval == -1)
         {
@@ -64,6 +64,7 @@ void *receiver(void *arg) {
             {
                 if (SM[i].free == 0 && FD_ISSET(SM[i].udpsockfd, &fds))
                 {   
+                    printf("%d was set\n", i);
                     // receive message
                     struct sockaddr_in cliaddr;
                     int len = sizeof(cliaddr);
@@ -244,6 +245,7 @@ void *receiver(void *arg) {
                         if(SM[i].rwnd.wndsize==0) SM[i].nospace=1;
                         else SM[i].nospace=0;
                         sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
+                        SM[i].ack_count++;
                         V(mtx);
                         //  P(ack_mtx);
                         // printf("ACK done\n");
@@ -295,6 +297,7 @@ void *receiver(void *arg) {
                         int len = sizeof(cliaddr);
 
                         sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, len);
+                        SM[i].ack_count++;
                         // P(ack_mtx);
                         // printf("ACK done\n");
                         
@@ -365,11 +368,13 @@ void *sender(void* arg) {
                                 if(SM[i].swnd.unack_msgs[index].seq_no == curr_seq_no){
                                     printf("Sending message! %s\n", SM[i].swnd.unack_msgs[index].message);
                                     int x=sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[index].message, strlen(SM[i].swnd.unack_msgs[index].message), 0, (struct sockaddr *)&cliaddr, len);
+                                    // printf("x=%d\n", x);
+                                    // printf("here1\n");
                                     P(mtx);
-                                    
                                     if(j==0) SM[i].swnd.timestamp = curr_time;
                                     curr_seq_no=((curr_seq_no)%15)+1;
                                     SM[i].swnd.window_end=index;
+                                    SM[i].msg_count++;
                                     V(mtx);
                                     // printf("here2\n");
                                 }
@@ -404,7 +409,10 @@ void *sender(void* arg) {
                     // printf("Sending message!!! %s\n", SM[i].swnd.unack_msgs[SM[i].swnd.window_start].message);
                     sendto(SM[i].udpsockfd, SM[i].swnd.unack_msgs[SM[i].swnd.window_start].message, strlen(SM[i].swnd.unack_msgs[SM[i].swnd.window_start].message), 0, (struct sockaddr *)&cliaddr, len);
                     printf("Sent to %s:%d, i=%d\n", SM[i].ip, SM[i].port, i);
+                    P(mtx);
                     SM[i].swnd.timestamp = time(NULL);
+                    SM[i].msg_count++;
+                    V(mtx);
 
                 }
                 int j=SM[i].swnd.window_end;
@@ -427,6 +435,7 @@ void *sender(void* arg) {
                         P(mtx);
                         SM[i].swnd.window_end=j;
                         SM[i].swnd.timestamp = time(NULL);
+                        SM[i].msg_count++;      
                         V(mtx);
                         curr_seq_no=((curr_seq_no)%15)+1;
                     }
@@ -448,19 +457,13 @@ void *garbage_collector(void *arg) {
     msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
 
     while(1){
+        sleep(2*T);
         // see if any pid has exited
         for(int i=0; i<N; i++){
             if(SM[i].free == 0){
                 if(kill(SM[i].pid, 0) == -1){
                     // pid has exited
-                    P(mtx);
-                    SM[i].free = 1;
-                    if(close(SM[i].udpsockfd) == -1) {
-                        V(mtx);
-                        perror("close()");
-                        pthread_exit(NULL);
-                    }
-                    V(mtx);
+                    close(SM[i].udpsockfd);
                 }
             }
         }
@@ -526,6 +529,10 @@ int main()
         // printf("Waiting on sem1\n");
         P(semid1);
         // printf("sem1 Signal received\n");
+        /* b) On being signaled, look at SOCK_INFO.
+        (c) If all fields are 0, it is a m_socket call. Create a UDP socket. Put the socket id returned in the sock_id field of SOCK_INFO.  If error, put -1 in sock_id field and errno in errno field. Signal on Sem2.
+        (d) if sock_id, IP, and port are non-zero, it is a m_bind call. Make a bind() call on the sock_id value, with the IP and port given. If error, reset sock_id to -1 in the structure and put errno in errno field. Signal on Sem2.
+        (e) Go back to wait on Sem1 */
 
         //look at SOCK_INFO
         P(mtx);

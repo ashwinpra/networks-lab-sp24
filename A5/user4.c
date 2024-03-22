@@ -6,7 +6,7 @@
 #include<sys/fcntl.h>
 #include <sys/select.h>
 
-// this will run on port 8081, and talk to user 1 on port 8080
+// this will run on port 8083, and talk to user 1 on port 8082
 int main(int argc, char const *argv[])
 {   
     int sockfd = m_socket(AF_INET, SOCK_MTP, 0);
@@ -19,12 +19,12 @@ int main(int argc, char const *argv[])
     
     struct sockaddr_in dest_addr;
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(8080);
+    dest_addr.sin_port = htons(8082);
     dest_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); 
 
     // printf("Binding to user1\n");
 
-    if(m_bind(sockfd, "127.0.0.1", 8081, "127.0.0.1", 8080) < 0){
+    if(m_bind(sockfd, "127.0.0.1", 8083, "127.0.0.1", 8082) < 0){
         perror("bind failed");
         return -1;
     }
@@ -37,7 +37,7 @@ int main(int argc, char const *argv[])
 
 
     // receive the file from user1
-    FILE *fp = fopen("test2.txt", "w");
+    FILE *fp = fopen("test4.txt", "w");
     if(fp == NULL){
         perror("fopen failed");
         return -1;

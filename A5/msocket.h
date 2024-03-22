@@ -30,12 +30,12 @@ typedef struct{
     int errno;
 } SOCK_INFO;
 
-typedef struct{ 
+typedef struct _packet_t{ 
     int seq_no;
     char message[1024];
 } packet_t;
 
-typedef struct {
+typedef struct _swnd_t{
     packet_t unack_msgs[SEND_BUFFER_SIZE]; // sequence number of messages sent but not yet acknowledged
     int wndsize;    
     int window_start;
@@ -45,7 +45,7 @@ typedef struct {
     time_t timestamp;
 } swnd_t; 
 
-typedef struct {
+typedef struct _rwnd_t{
     packet_t exp_msgs[RECV_BUFFER_SIZE]; // sequence number of messages expected to be received
     int wndsize;    // window size indicating max number of messages that can be received based on buffer availability
     int window_start;
@@ -62,6 +62,8 @@ typedef struct _msocket_t{
     swnd_t swnd; 
     rwnd_t rwnd; 
     int nospace; // 1 if no space in recv_buffer, 0 otherwise
+    int msg_count; // number of packets sent
+    int ack_count; // number of acks sent
 } msocket_t;
 
 int errno; // global variable to store error number

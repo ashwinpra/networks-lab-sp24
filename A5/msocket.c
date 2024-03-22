@@ -90,7 +90,6 @@ int m_socket(int domain, int type, int protocol) {
     SM[freeidx].swnd.window_end = -1;
     for(int i=0;i<SEND_BUFFER_SIZE;i++){
         SM[freeidx].swnd.unack_msgs[i].seq_no = -1;
-        // printf("i=%d | SM[%d].swnd.unack_msgs[i].seq_no=%d\n", i, freeidx, SM[freeidx].swnd.unack_msgs[i].seq_no);
     }
 
     SM[freeidx].rwnd.wndsize = RECV_BUFFER_SIZE;
@@ -101,6 +100,8 @@ int m_socket(int domain, int type, int protocol) {
     }
     SM[freeidx].rwnd.curr_seq_no = 6;
     SM[freeidx].nospace = 0;
+    SM[freeidx].msg_count = 0;
+    SM[freeidx].ack_count = 0;
 
     V(mtx);
 
@@ -111,11 +112,6 @@ int m_socket(int domain, int type, int protocol) {
 
 int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port) {
     // printf("Bind called\n");
-    /*Find the corresponding actual UDP socket id from the SM table. 
-    Put the UDP socket ID, IP, and port in SOCK_INFO table. Signal Sem1. 
-    Then wait on Sem2. On being woken, checks sock_id field of SOCK_INFO. 
-    If -1, return error and set errno correctly. If not return success.
-    In both cases, reset all fields of SOCK_INFO to 0.*/
 
     int semid1, semid2, mtx;
     struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};
@@ -299,6 +295,8 @@ int m_close(int sockfd)
     V(mtx);
 
     printf("Closing socket %d\n", sockfd);
+    printf("Total messages sent = %d\n", SM[sockfd].msg_count);
+    printf("Total acks received = %d\n", SM[sockfd].ack_count);
 
     return 0;
 }
