@@ -92,10 +92,10 @@ void *receiver(void *arg) {
                         continue;
                     }
 
-                    // if(dropMessage(p)){
-                    //     printf("Dropped message\n");
-                    //     continue;
-                    // }
+                    if(dropMessage(p)){
+                        printf("Dropped message: %s\n",buf);
+                        continue;
+                    }
                     
                     // if its a normal message, it's of the form "seq:msg"
                     // if its an ACK, it's of the form "<last_inorder_seq>:<rwnd_size>:ACK"
@@ -157,6 +157,7 @@ void *receiver(void *arg) {
 
                     else {
                         // remove header; message will be of the form "seq:msg"
+                       
                         int seq_num = atoi(strtok(buf, ":"));
                         char* msg = strtok(NULL, ":");
 
@@ -175,7 +176,7 @@ void *receiver(void *arg) {
                             while(1){
                                 if(SM[i].rwnd.exp_msgs[index].seq_no == seq_num){
                                     strcpy(SM[i].rwnd.exp_msgs[index].message, msg);
-                                    printf("Writing to SM[%d].rwnd.exp_msgs[%d].message = %s\n", i, index, SM[i].rwnd.exp_msgs[index].message);
+                                    
                                     if(next_seq==seq_num){
                                         SM[i].rwnd.window_end=index;
                                         SM[i].rwnd.wndsize--;
@@ -183,6 +184,7 @@ void *receiver(void *arg) {
                                         next_seq=((next_seq)%15)+1;
                                         while(index!=SM[i].rwnd.window_start && SM[i].rwnd.exp_msgs[index].seq_no==next_seq){
                                             if(SM[i].rwnd.exp_msgs[index].message[0]=='\0') break;
+                                            printf("Writing to SM[%d].rwnd.exp_msgs[%d].message = %s\n", i, index, SM[i].rwnd.exp_msgs[index].message);
                                             SM[i].rwnd.window_end=index;
                                             SM[i].rwnd.wndsize--;
                                             next_seq=((next_seq)%15)+1;
@@ -241,8 +243,8 @@ void *receiver(void *arg) {
                         if(SM[i].rwnd.wndsize==RECV_BUFFER_SIZE){
                             printf("window start = %d, window end = %d\n", SM[i].rwnd.window_start, SM[i].rwnd.window_end);
                             printf("curr seq no = %d\n", SM[i].rwnd.exp_msgs[SM[i].rwnd.window_end].seq_no);
-                            last_seq_no=(SM[i].rwnd.curr_seq_no-RECV_BUFFER_SIZE-1+16)%16;
-                            if(last_seq_no==0) last_seq_no++;
+                            last_seq_no=(SM[i].rwnd.curr_seq_no-RECV_BUFFER_SIZE-1+15)%15;
+                            if(last_seq_no==0) last_seq_no=15;
                         }else last_seq_no=SM[i].rwnd.exp_msgs[SM[i].rwnd.window_end].seq_no;
                             
                         index=SM[i].rwnd.window_end;
@@ -250,6 +252,7 @@ void *receiver(void *arg) {
                         bzero(ack, 1024);
                         sprintf(ack, "%d:%d:ACK", last_seq_no, SM[i].rwnd.wndsize);
                         if(SM[i].rwnd.wndsize==0) SM[i].nospace=1;
+                        else SM[i].nospace=0;
                         sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
                         V(mtx);
                         //  P(ack_mtx);
@@ -273,7 +276,7 @@ void *receiver(void *arg) {
                 {
                     if(SM[i].rwnd.wndsize > 0)
                     {
-                        SM[i].nospace = 0;
+                        // SM[i].nospace = 0;
                         // send duplicate ACK with updated rwnd size
                         // printf("This dude %d has space now!!\n",i);
                         int last_seq_no;
