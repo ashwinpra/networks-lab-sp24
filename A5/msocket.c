@@ -59,7 +59,7 @@ int m_socket(int domain, int type, int protocol) {
     and return the index in SM table as usual. In both cases, reset all fields of SOCK_INFO to 0.*/
 
     V(semid1);
-    printf("semid1 signaled\n");
+    // printf("semid1 signaled\n");
     P(semid2);
 
     if(sockinfo->sockid == -1){
@@ -254,13 +254,13 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
         // printf("Writing to buf now\n");
         sprintf(buf, "%s", msocket[sockfd].rwnd.exp_msgs[index].message);
         P(mtx);
-        printf("Lock acquired\n");
+        // printf("Lock acquired\n");
         msocket[sockfd].rwnd.exp_msgs[index].seq_no = msocket[sockfd].rwnd.curr_seq_no;
         msocket[sockfd].rwnd.curr_seq_no=((msocket[sockfd].rwnd.curr_seq_no)%15)+1;
                 printf("Updated curr_seq_no = %d\n", msocket[sockfd].rwnd.curr_seq_no);
         bzero(msocket[sockfd].rwnd.exp_msgs[index].message, 1024);
         msocket[sockfd].rwnd.wndsize++;
-        printf("recvfrom: msocket[%d].rwnd.wndsize = %d\n", sockfd, msocket[sockfd].rwnd.wndsize);
+        // printf("recvfrom: msocket[%d].rwnd.wndsize = %d\n", sockfd, msocket[sockfd].rwnd.wndsize);
         msocket[sockfd].rwnd.window_start = (msocket[sockfd].rwnd.window_start+1)%RECV_BUFFER_SIZE;
         V(mtx);
 
@@ -271,7 +271,7 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
         src->sin_port = htons(msocket[sockfd].port);
         src->sin_addr.s_addr = inet_addr(msocket[sockfd].ip);        
 
-        printf("recv done!\n");
+        // printf("recv done!\n");
         return strlen(buf);
     }
         
@@ -305,7 +305,7 @@ int m_close(int sockfd)
 
 int dropMessage(float P){
     float r = (float)rand()/(float)(RAND_MAX);
-    printf("r= %f, p=%f\n", r, P);
+    // printf("r= %f, p=%f\n", r, P);
     if(r<p){
         return 1;
     }
