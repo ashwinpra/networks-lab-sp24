@@ -85,11 +85,11 @@ void *receiver(void *arg) {
                     }
 
                     if(dropMessage(p)){
-                        printf("Dropped message: [%s]\n",buf);
+                        printf("Dropped message: %s\n",buf);
                         continue;
                     }
 
-                    printf("Received: [%s]\n", buf);
+                    printf("Received: %s\n", buf);
                     
                     // if its a normal message, it's of the form "seq:msg"
                     // if its an ACK, it's of the form "<last_inorder_seq>:<rwnd_size>:ACK"

@@ -135,6 +135,13 @@ List of functions:
         - 1 if message is dropped
         - 0 otherwise
 
+7. int getmsgcount(int sockfd):
+    - Returns the number of messages sent by the socket
+    - Parameters:
+        - sockfd: socket descriptor
+    - Returns:
+        - number of messages sent
+
 ----------------------------------------------------------------------------------------------------------------------------
 
 
