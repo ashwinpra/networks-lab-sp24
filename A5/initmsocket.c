@@ -16,7 +16,7 @@
 
 SOCK_INFO* sockinfo;
 struct sembuf pop = {0, -1, 0}, vop = {0, 1, 0};
-int semid1, semid2, mtx, ack_mtx;
+int semid1, semid2, mtx;
 
 
 void *receiver(void *arg) {
@@ -106,7 +106,6 @@ void *receiver(void *arg) {
                         V(mtx);
                         // printf("Updated %d recv_wndsize to %d\n", i, rwnd_size);
                         // if(SM[i].swnd.recv_wndsize == 0) SM[i].nospace = 1;
-                        // V(ack_mtx);
 
                         //! case 1: ack = start, then fine, move window by 1 
                         //! case 2: ack is somewhere between start to end - move window completely 
@@ -249,7 +248,6 @@ void *receiver(void *arg) {
                         else SM[i].nospace=0;
                         sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, sizeof(cliaddr));
                         V(mtx);
-                        //  P(ack_mtx);
                         // printf("ACK done\n");
                         break;
                     }   
@@ -299,7 +297,6 @@ void *receiver(void *arg) {
                         int len = sizeof(cliaddr);
 
                         sendto(SM[i].udpsockfd, ack, strlen(ack), 0, (struct sockaddr *)&cliaddr, len);
-                        // P(ack_mtx);
                         // printf("ACK done\n");
                         
                     }
@@ -482,17 +479,14 @@ int main()
     key_t key1=ftok("msocket.h", 101);
     key_t key2=ftok("msocket.h", 102);
     key_t key3=ftok("msocket.h", 103);
-    key_t key4=ftok("msocket.h", 104);
     
     semid1 = semget(key1, 1, 0777|IPC_CREAT);
     semid2 = semget(key2, 1, 0777|IPC_CREAT);
     mtx = semget(key3, 1, 0777|IPC_CREAT);
-    ack_mtx = semget(key4, 1, 0777|IPC_CREAT);
     
     semctl(semid1, 0, SETVAL, 0);
     semctl(semid2, 0, SETVAL, 0);
     semctl(mtx, 0, SETVAL, 1);
-    semctl(ack_mtx, 0, SETVAL, 0);
 
     //shared memory
     key_t key_sockinfo=ftok("msocket.h", 100);
