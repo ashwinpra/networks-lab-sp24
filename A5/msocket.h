@@ -9,7 +9,7 @@
 
 #define N 25 // max number of active sockets 
 #define T 5 // timeout in seconds
-#define p 0.05 // probability of packet drop (vary it)
+#define p 0 // probability of packet drop (vary it)
 #define SEND_BUFFER_SIZE 10
 #define RECV_BUFFER_SIZE 5
 
@@ -58,6 +58,7 @@ typedef struct _msocket_t{
     rwnd_t rwnd; 
     int nospace; // 1 if no space in recv_buffer, 0 otherwise
     int msg_count; // number of packets sent
+    int ack_count; // number of acks sent
 } msocket_t;
 
 int errno; // global variable to store error number
