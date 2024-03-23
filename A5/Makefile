@@ -25,4 +25,4 @@ user4: lib user4.c
 	./user4
 
 clean:
-	rm -f *.o *.a user1 user2 init
+	rm -f *.o *.a user1 user2 user3 user4 init

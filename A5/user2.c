@@ -22,19 +22,12 @@ int main(int argc, char const *argv[])
     dest_addr.sin_port = htons(8080);
     dest_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); 
 
-    // printf("Binding to user1\n");
-
     if(m_bind(sockfd, "127.0.0.1", 8081, "127.0.0.1", 8080) < 0){
         perror("bind failed");
         return -1;
     }
 
-    // printf("Bind done!\n");
-
-    sleep(15);
-
     char buf[1024];
-
 
     // receive the file from user1
     FILE *fp = fopen("test2.txt", "w");
@@ -42,34 +35,26 @@ int main(int argc, char const *argv[])
         perror("fopen failed");
         return -1;
     }
-
-    fd_set readfds;
-    FD_SET(sockfd, &readfds);
     
-
     
     int count=0;
     while(1) {
         if(m_recvfrom(sockfd, buf, 1024, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){    
-            printf("Not received yet\n");
-            sleep(5);
+            perror("recvfrom failed");
+            sleep(1);
         }
         else {
-            // printf("\nReceived: %s\n", buf);
             if(strcmp(buf, "EOF") == 0){
                 break;
             }
             fprintf(fp, "%s", buf);
-            printf("Written to file\n");
+            printf("Received: %s\n", buf);
             count++;
             printf("count = %d\n", count);
-
-            // if(count==7) while(1);
         }
     }
 
-
-
+    fclose(fp);
     m_close(sockfd);
 
     return 0;

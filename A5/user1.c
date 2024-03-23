@@ -22,58 +22,54 @@ int main(int argc, char const *argv[])
     dest_addr.sin_port = htons(8081);
     dest_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    // printf("Binding to user2\n");
 
     if(m_bind(sockfd, "127.0.0.1", 8080, "127.0.0.1", 8081) < 0){
         perror("bind failed");
         return -1;
     }
 
-
     FILE *fp = fopen("test.txt", "r");
     if(fp == NULL){
         perror("fopen failed");
         return -1;
     }
+
     int count=1;
 
-    while(fgets(buf, 1015, fp) != NULL){
-      
+    while(fgets(buf, 1020, fp) != NULL){
         while(1){
-        if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
+        if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) <= 0){
             perror("sendto failed");
-            sleep(7);
+            sleep(1);
             continue;
         }
+
         printf("count = %d\n", count);
         count++;
         break;
+
         }
         
     }
 
-
-  
-
     strcpy(buf, "EOF");
     while(1){
-    if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
-        perror("sendto failed");
-        sleep(7);
-        continue;
+        if(m_sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0){
+            perror("sendto failed");
+            sleep(1);
+            continue;
+        }
+        break;
     }
-    printf("Sent: %s\n", buf);
-    printf("count = %d\n", count);
-    break;
-    }
+
+    printf("Total messages sent: %d\n", getmsgcount(sockfd));
 
     sleep(1000);
     
+    fclose(fp);
     m_close(sockfd);
 
     printf("Closed!");
-
-    sleep(10);
 
     return 0;
 }

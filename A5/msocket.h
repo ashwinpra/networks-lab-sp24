@@ -9,16 +9,11 @@
 
 #define N 25 // max number of active sockets 
 #define T 5 // timeout in seconds
-#define p 0.5 // probability of packet drop (vary it)
+#define p 0.05 // probability of packet drop (vary it)
 #define SEND_BUFFER_SIZE 10
 #define RECV_BUFFER_SIZE 5
 
 #define SOCK_MTP 120 // random number for SOCK_MTP type
-
-// error numbers
-#define ENOBUFS 501 
-#define ENOTBOUND 502
-#define ENOMSG 503
 
 #define P(s) semop(s, &pop, 1)  
 #define V(s) semop(s, &vop, 1)  
@@ -27,7 +22,7 @@ typedef struct{
     int sockid;
     char IP[16];
     int port;
-    int errno;
+    int errnum;
 } SOCK_INFO;
 
 typedef struct _packet_t{ 
@@ -63,7 +58,6 @@ typedef struct _msocket_t{
     rwnd_t rwnd; 
     int nospace; // 1 if no space in recv_buffer, 0 otherwise
     int msg_count; // number of packets sent
-    int ack_count; // number of acks sent
 } msocket_t;
 
 int errno; // global variable to store error number
@@ -73,7 +67,7 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
 int m_sendto(int sockfd, char* buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);
 int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen);
 int m_close(int sockfd);
-
+int getmsgcount(int sockfd);
 int dropMessage(float P);
 
 #endif

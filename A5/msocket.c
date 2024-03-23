@@ -7,11 +7,10 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <msocket.h>
+#include <errno.h>
 #include <sys/sem.h>	
-// #include <errno.h>
 #include <time.h>
  
-
 int m_socket(int domain, int type, int protocol) {
     key_t key = ftok("msocket.h", 99);
     int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
@@ -63,10 +62,10 @@ int m_socket(int domain, int type, int protocol) {
     P(semid2);
 
     if(sockinfo->sockid == -1){
-        errno = sockinfo->errno;
+        errno = sockinfo->errnum;
         P(mtx);
         sockinfo->sockid=0;
-        sockinfo->errno=0;
+        sockinfo->errnum=0;
         sockinfo->port=0;
         strcpy(sockinfo->IP, "");
         V(mtx);
@@ -78,7 +77,7 @@ int m_socket(int domain, int type, int protocol) {
     SM[freeidx].udpsockfd = sockinfo->sockid;
     
     sockinfo->sockid=0;
-    sockinfo->errno=0;
+    sockinfo->errnum=0;
     sockinfo->port=0;
     strcpy(sockinfo->IP, "");
 
@@ -101,7 +100,6 @@ int m_socket(int domain, int type, int protocol) {
     SM[freeidx].rwnd.curr_seq_no = 6;
     SM[freeidx].nospace = 0;
     SM[freeidx].msg_count = 0;
-    SM[freeidx].ack_count = 0;
 
     V(mtx);
 
@@ -145,13 +143,13 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     P(semid2);
 
     if(sockinfo->sockid == -1){
-        errno = sockinfo->errno;
+        errno = sockinfo->errnum;
         P(mtx);
         strcpy(sockinfo->IP, "");
         // sockinfo->IP="";
         sockinfo->sockid=0;
         sockinfo->port=0;
-        sockinfo->errno = 0;
+        sockinfo->errnum = 0;
         V(mtx);
         return -1;
     }
@@ -161,7 +159,7 @@ int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)
     // sockinfo->IP="";
     sockinfo->sockid=0;
     sockinfo->port=0;
-    sockinfo->errno = 0;
+    sockinfo->errnum = 0;
     SM[sockfd].port= dest_port;
     strcpy(SM[sockfd].ip, dest_ip);
     V(mtx);
@@ -183,15 +181,14 @@ int m_sendto(int sockfd, char *buf, size_t len, int flags, const struct sockaddr
     int dest_port = ntohs(((struct sockaddr_in *)dest_addr)->sin_port);
     
     if(msocket[sockfd].port != dest_port || strcmp(msocket[sockfd].ip, inet_ntoa(((struct sockaddr_in *)dest_addr)->sin_addr))!=0 ){
-        errno = ENOTBOUND;
+        errno = ENOTCONN;
         return -1;
     }
 
-    printf("Sending message %s\n", buf);
+    // printf("Sending message %s\n", buf);
 
     if(msocket[sockfd].swnd.wndsize==0){
         errno = ENOBUFS;
-        perror("No space in send buffer\n");
         return -1;
     }
 
@@ -253,7 +250,7 @@ int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *sr
         // printf("Lock acquired\n");
         msocket[sockfd].rwnd.exp_msgs[index].seq_no = msocket[sockfd].rwnd.curr_seq_no;
         msocket[sockfd].rwnd.curr_seq_no=((msocket[sockfd].rwnd.curr_seq_no)%15)+1;
-                printf("Updated curr_seq_no = %d\n", msocket[sockfd].rwnd.curr_seq_no);
+                // printf("Updated curr_seq_no = %d\n", msocket[sockfd].rwnd.curr_seq_no);
         bzero(msocket[sockfd].rwnd.exp_msgs[index].message, 1024);
         msocket[sockfd].rwnd.wndsize++;
         // printf("recvfrom: msocket[%d].rwnd.wndsize = %d\n", sockfd, msocket[sockfd].rwnd.wndsize);
@@ -294,11 +291,15 @@ int m_close(int sockfd)
     SM[sockfd].free = 1;
     V(mtx);
 
-    printf("Closing socket %d\n", sockfd);
-    printf("Total messages sent = %d\n", SM[sockfd].msg_count);
-    printf("Total acks received = %d\n", SM[sockfd].ack_count);
-
     return 0;
+}
+
+int getmsgcount(int sockfd){
+    key_t key = ftok("msocket.h", 99);
+    int shmid = shmget(key, N*sizeof(msocket_t), 0666 | IPC_CREAT);
+    msocket_t *SM = (msocket_t *)shmat(shmid, 0, 0);
+
+    return SM[sockfd].msg_count;
 }
 
 int dropMessage(float P){
