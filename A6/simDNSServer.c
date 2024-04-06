@@ -48,11 +48,14 @@ int main() {
         return 1;
     }
 
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(50000); 
-    addr.sin_addr.s_addr = inet_addr("127.0.0.1"); 
-    bind(sockfd, (struct sockaddr *)&addr, sizeof(addr));
+    struct sockaddr_ll addr;
+    addr.sll_family = AF_PACKET;
+    addr.sll_protocol = htons(ETH_P_ALL);
+    addr.sll_ifindex = if_nametoindex("enp0s25"); //todo: mention this in readme
+    if(bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        perror("bind");
+        return 1;
+    }
 
     printf("Socket %d created and bound\n", sockfd);
 
@@ -61,11 +64,14 @@ int main() {
 
         // read the packet including headers 
         char packet[65536];
+        printf("Waiting on receive!\n");
         int len = recvfrom(sockfd, packet, 65536, 0, NULL, NULL);
         if(len < 0) {
             perror("recvfrom");
             return 1;
         }
+
+        printf("Received! %s <EOF>\n", packet);
 
         // extract the Ethernet header
         struct ethhdr *eth = (struct ethhdr *)packet;
@@ -75,6 +81,7 @@ int main() {
 
         // extract the IP header
         struct iphdr *ip = (struct iphdr *)(packet + sizeof(struct ethhdr));
+        printf("protocol value is %d\n", ip->protocol);
         if(ip->protocol != 254) {
             continue;
         }

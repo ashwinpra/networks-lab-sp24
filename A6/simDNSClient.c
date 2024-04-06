@@ -15,7 +15,9 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <netpacket/packet.h>
+#include <net/if.h>
 
+#define T 5 // timeout in seconds
 
 typedef struct _query {
     int len;
@@ -74,21 +76,35 @@ int main(int argc, char* argv[]) {
     }
 
     char *destMAC = argv[1];
+     
+    printf("Welcome to simDNS Client\n");
 
     int curr_ID = 0; 
     int pendingQueries[100]; 
 
     // open a raw socket to capture all packets till Ethernet
-    int sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+    int sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+
+    struct sockaddr_ll addr;
+    addr.sll_family = AF_PACKET;
+    addr.sll_protocol = htons(ETH_P_ALL);
+    addr.sll_ifindex = if_nametoindex("enp0s25");
+    if(bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        perror("bind");
+        return 1;
+    }
+
 
     // wait for query from user: of the form getIP N <domain-1> <domain-2> ... <domain-N> 
     char query[100];
 
     while(1){
-
+        
         // read query from user
         fgets(query, 100, stdin);
         query[strlen(query)-1] = '\0';
+
+        printf("Got query: %s\n", query);
 
         if(strcmp(query, "EXIT") == 0) {
             break;
@@ -149,6 +165,7 @@ int main(int argc, char* argv[]) {
         ip->daddr = inet_addr("127.0.0.1"); 
 
         // prepare the packet
+        // todo: check here
         memcpy(packet + sizeof(struct ethhdr) + sizeof(struct iphdr), &qryPacket, sizeof(simDNSQuery));
 
         // send the packet over IP
@@ -160,6 +177,8 @@ int main(int argc, char* argv[]) {
 
         sendto(sockfd, packet, sizeof(struct ethhdr) + ntohs(ip->tot_len), 0, (struct sockaddr *)&addr, sizeof(addr));
 
+        printf("Sent query!\n");
+
         // store the query ID in pendingQueries
         pendingQueries[qryPacket.id] = 1; 
 
@@ -168,9 +187,11 @@ int main(int argc, char* argv[]) {
         FD_ZERO(&fds);
         FD_SET(sockfd, &fds); 
 
+        struct timeval tv;
+        tv.tv_sec = T;
+        tv.tv_usec = 0;
 
-
-        int ret = select(sockfd+1, &fds, NULL, NULL, NULL);
+        int ret = select(sockfd+1, &fds, NULL, NULL, &tv);  
 
         if(ret < 0) {
             perror("select");
