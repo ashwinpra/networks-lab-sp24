@@ -45,6 +45,7 @@ typedef struct _simDNSResponse {
 typedef struct _pendingQuery {
     int timeoutCount;
     query queries[8];
+    struct timeval tv; 
 } pendingQuery;
 
 int domainNameIsValid(char *domain) {
@@ -71,6 +72,28 @@ int domainNameIsValid(char *domain) {
         }
     }
     return 1;
+}
+
+void constructPacket(char packet[65536], char *destMAC, simDNSQuery qryPacket) {
+
+    struct ethhdr *eth = (struct ethhdr *)packet;
+    memset(eth->h_source, 0, 6); 
+    sscanf(destMAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &eth->h_dest[0], &eth->h_dest[1], &eth->h_dest[2], &eth->h_dest[3], &eth->h_dest[4], &eth->h_dest[5]);
+    eth->h_proto = htons(ETH_P_IP);
+
+    struct iphdr *ip = (struct iphdr *)(packet + sizeof(struct ethhdr));
+    ip->ihl = 5;
+    ip->version = 4;
+    ip->tos = 0;
+    ip->tot_len = htons(sizeof(struct iphdr) + sizeof(simDNSQuery));
+    ip->id = htons(0); 
+    ip->frag_off = 0;
+    ip->ttl = 64; // arbitrary value
+    ip->protocol = 254; // 254 for simDNS
+    ip->saddr = inet_addr("127.0.0.1"); 
+    ip->daddr = inet_addr("127.0.0.1"); 
+
+    memcpy(packet + sizeof(struct ethhdr) + sizeof(struct iphdr), &qryPacket, sizeof(simDNSQuery));
 }
 
 int main(int argc, char* argv[]) {
@@ -109,12 +132,10 @@ int main(int argc, char* argv[]) {
     char query[100];
 
     while(1){
-        
+        printf("Enter query: ");
         // read query from user
         fgets(query, 100, stdin);
         query[strlen(query)-1] = '\0';
-
-        printf("Got query: %s\n", query);
 
         if(strcmp(query, "EXIT") == 0) {
             break;
@@ -154,27 +175,8 @@ int main(int argc, char* argv[]) {
             strcpy(qryPacket.queries[i].domain, domains[i]);
         }
 
-        // make ethernet and IP headers
         char packet[65536];
-
-        struct ethhdr *eth = (struct ethhdr *)packet;
-        memset(eth->h_source, 0, 6); 
-        sscanf(destMAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &eth->h_dest[0], &eth->h_dest[1], &eth->h_dest[2], &eth->h_dest[3], &eth->h_dest[4], &eth->h_dest[5]);
-        eth->h_proto = htons(ETH_P_IP);
-
-        struct iphdr *ip = (struct iphdr *)(packet + sizeof(struct ethhdr));
-        ip->ihl = 5;
-        ip->version = 4;
-        ip->tos = 0;
-        ip->tot_len = htons(sizeof(struct iphdr) + sizeof(simDNSQuery));
-        ip->id = htons(0); 
-        ip->frag_off = 0;
-        ip->ttl = 64; // arbitrary value
-        ip->protocol = 254; // 254 for simDNS
-        ip->saddr = inet_addr("127.0.0.1"); 
-        ip->daddr = inet_addr("127.0.0.1"); 
-
-        memcpy(packet + sizeof(struct ethhdr) + sizeof(struct iphdr), &qryPacket, sizeof(simDNSQuery));
+        constructPacket(packet, destMAC, qryPacket);
 
         struct sockaddr_ll addr;
         addr.sll_family = AF_PACKET;
@@ -182,13 +184,10 @@ int main(int argc, char* argv[]) {
         sscanf(destMAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &addr.sll_addr[0], &addr.sll_addr[1], &addr.sll_addr[2], &addr.sll_addr[3], &addr.sll_addr[4], &addr.sll_addr[5]);
         addr.sll_ifindex = if_nametoindex("enp0s25");
 
-
         if(sendto(sockfd, packet, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(simDNSQuery), 0, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
             perror("sendto");
             return 1;
         }
-
-        printf("Sent query!\n");
 
         // store the query ID in pendingQueries
         pendingQueries[qryPacket.id].timeoutCount = 1;
@@ -197,41 +196,67 @@ int main(int argc, char* argv[]) {
             strcpy(pendingQueries[qryPacket.id].queries[i].domain, qryPacket.queries[i].domain);
         }
 
+        // set timeval to check for timeouts for all pending queries
+        for(int i=0; i<1000; i++) {
+            if(pendingQueries[i].timeoutCount >= 1) {
+                gettimeofday(&pendingQueries[i].tv, NULL);
+            }
+        }
+
         // wait for response
         fd_set fds; 
         FD_ZERO(&fds);
         FD_SET(sockfd, &fds); 
 
-        struct timeval tv;
-        tv.tv_sec = T;
-        tv.tv_usec = 0;
-
-        int ret = select(sockfd+1, &fds, NULL, NULL, &tv);  
+        int ret = select(sockfd+1, &fds, NULL, NULL, NULL);  
 
         if(ret < 0) {
             perror("select");
             return 1;
         }
 
-        if(ret == 0) {
-            printf("Timeout\n");
-            for(int i=0; i<N; i++) {
-                // if it was pending, increase the timeout count
-                if(pendingQueries[qryPacket.id].timeoutCount > 0) {
-                    pendingQueries[qryPacket.id].timeoutCount++;
-                }
-
-                if(pendingQueries[qryPacket.id].timeoutCount > 3) {
-                    printf("Error: Timeout for query ID %d\n", qryPacket.id);
-                    pendingQueries[qryPacket.id].timeoutCount = 0;
-                }
-            }
-            continue;
-        }
-
         if(FD_ISSET(sockfd, &fds)) {
-            // read the packet including headers 
             while(1){
+                int timeout_flag = 0;
+
+                // check if timeout has occured for any pending query
+                for(int i=0; i<1000; i++) {
+                    if(pendingQueries[i].timeoutCount >= 1) {
+                        struct timeval tv;
+                        gettimeofday(&tv, NULL);
+                        if(tv.tv_sec - pendingQueries[i].tv.tv_sec >= T) {
+                            pendingQueries[i].timeoutCount++;
+                            timeout_flag = 1;
+
+                            // resend the query
+                            simDNSQuery qryPacket;
+                            qryPacket.id = i;
+                            qryPacket.type = 0;
+                            qryPacket.n_queries = 0;
+                            for(int j=0; j<8; j++) {
+                                if(pendingQueries[i].queries[j].len > 0) {
+                                    qryPacket.n_queries++;
+                                    qryPacket.queries[j].len = pendingQueries[i].queries[j].len;
+                                    strcpy(qryPacket.queries[j].domain, pendingQueries[i].queries[j].domain);
+                                }
+                            }
+
+                            char packet[65536];
+                            constructPacket(packet, destMAC, qryPacket);
+
+                            if(sendto(sockfd, packet, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(simDNSQuery), 0, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+                                perror("sendto");
+                                return 1;
+                            }
+                        }
+                        if(pendingQueries[i].timeoutCount > 3) {
+                            printf("Error: Timeout for query ID: %d\n", i);
+                            pendingQueries[i].timeoutCount = 0;
+                    }
+                    }
+                }
+
+                if(timeout_flag) {break;}
 
                 char packet[65536];
                 int len = recvfrom(sockfd, packet, 65536, 0, NULL, NULL);
@@ -239,25 +264,24 @@ int main(int argc, char* argv[]) {
                     perror("recvfrom");
                     return 1;
                 }
-                // printf("Received response! %s\n", packet);
-                // extract the Ethernet header
+
+                // check ethernet and IP headers
+
                 struct ethhdr *eth = (struct ethhdr *)packet;
                 if(ntohs(eth->h_proto) != ETH_P_IP) {
                     continue;
                 }
 
-                // extract the IP header
                 struct iphdr *ip = (struct iphdr *)(packet + sizeof(struct ethhdr));
-                printf("protocol value is %d\n", ip->protocol);
+                // printf("protocol value is %d\n", ip->protocol);
                 if(ip->protocol != 254) {
                     continue;
                 }
 
-                // extract the data
+                // extract the data and process response
                 simDNSResponse resPacket;
                 memcpy(&resPacket, packet + sizeof(struct ethhdr) + sizeof(struct iphdr), sizeof(simDNSResponse));
 
-                // process the response
                 if(pendingQueries[resPacket.id].timeoutCount >= 1) {
                     printf("Query ID: %d\n", resPacket.id);
                     printf("Total query strings: %d\n", resPacket.n_responses);

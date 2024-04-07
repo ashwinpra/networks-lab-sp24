@@ -16,7 +16,7 @@
 #include <netinet/if_ether.h>
 #include <netpacket/packet.h>
 
-#define p 0.1
+#define p 0.5
 
 typedef struct _query {
     int len;
@@ -80,11 +80,6 @@ int main() {
             return 1;
         }
 
-        if(dropMessage(p)){
-            printf("Dropped!\n");
-            continue;
-        }
-
         // extract the Ethernet header
         struct ethhdr *eth = (struct ethhdr *)packet;
         if(ntohs(eth->h_proto) != ETH_P_IP) {
@@ -100,6 +95,12 @@ int main() {
         if(ip->protocol != 254) {
             continue;
         }
+
+        if(dropMessage(p)){
+            printf("Dropped!\n");
+            continue;
+        }
+
 
         // extract the data
         simDNSQuery qryPacket;
