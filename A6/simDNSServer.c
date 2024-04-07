@@ -16,6 +16,7 @@
 #include <netinet/if_ether.h>
 #include <netpacket/packet.h>
 
+#define p 0.1
 
 typedef struct _query {
     int len;
@@ -40,9 +41,17 @@ typedef struct _simDNSResponse {
     response responses[8];
 } simDNSResponse;
 
+int dropMessage(float P){
+    float r = (float)rand()/(float)(RAND_MAX);
+    if(r<P){
+        return 1;
+    }
+    return 0;
+}
+
 int main() {
     // open a raw socket to capture all packets till Ethernet
-    int sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+    int sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if(sockfd < 0) {
         perror("socket");
         return 1;
@@ -52,26 +61,29 @@ int main() {
     addr.sll_family = AF_PACKET;
     addr.sll_protocol = htons(ETH_P_ALL);
     addr.sll_ifindex = if_nametoindex("enp0s25"); //todo: mention this in readme
+
     if(bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         perror("bind");
         return 1;
     }
 
-    printf("Socket %d created and bound\n", sockfd);
+    // printf("Socket %d created and bound\n", sockfd);
 
     // read all packets received on the socket
     while(1) {
 
         // read the packet including headers 
         char packet[65536];
-        printf("Waiting on receive!\n");
         int len = recvfrom(sockfd, packet, 65536, 0, NULL, NULL);
         if(len < 0) {
             perror("recvfrom");
             return 1;
         }
 
-        printf("Received! %s <EOF>\n", packet);
+        if(dropMessage(p)){
+            printf("Dropped!\n");
+            continue;
+        }
 
         // extract the Ethernet header
         struct ethhdr *eth = (struct ethhdr *)packet;
@@ -79,9 +91,12 @@ int main() {
             continue;
         }
 
+        // get source MAC to send response later
+        char destMAC[18];
+        sprintf(destMAC, "%02x:%02x:%02x:%02x:%02x:%02x", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
+
         // extract the IP header
         struct iphdr *ip = (struct iphdr *)(packet + sizeof(struct ethhdr));
-        printf("protocol value is %d\n", ip->protocol);
         if(ip->protocol != 254) {
             continue;
         }
@@ -95,10 +110,7 @@ int main() {
         resPacket.n_responses = qryPacket.n_queries;
 
         // process the query
-        printf("Received simDNS query packet with ID %d\n", qryPacket.id);
-        printf("Number of queries: %d\n", qryPacket.n_queries);
         for(int i=0; i<qryPacket.n_queries; i++) {
-            printf("Query %d: %s\n", i, qryPacket.queries[i].domain);
             struct hostent *host;
             host = gethostbyname(qryPacket.queries[i].domain);
             if(host == NULL) {
@@ -109,19 +121,35 @@ int main() {
             }
         }
 
-        // send the response
-        printf("Sending simDNS response packet with ID %d\n", resPacket.id);
-        printf("Number of responses: %d\n", resPacket.n_responses);
-        for(int i=0; i<resPacket.n_responses; i++) {
-            printf("Response %d: %s\n", i, resPacket.responses[i].ip);
-        }
+        struct ethhdr *eth1 = (struct ethhdr *)packet;
+        memset(eth1->h_source, 0, 6); 
+        sscanf(destMAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &eth1->h_dest[0], &eth1->h_dest[1], &eth1->h_dest[2], &eth1->h_dest[3], &eth1->h_dest[4], &eth1->h_dest[5]);
+
+        struct iphdr *ip1 = (struct iphdr *)(packet + sizeof(struct ethhdr));
+        ip1->ihl = 5;
+        ip1->version = 4;
+        ip1->tos = 0;
+        ip1->tot_len = htons(sizeof(struct iphdr) + sizeof(simDNSResponse));
+        ip1->id = htons(0); 
+        ip1->frag_off = 0;
+        ip1->ttl = 64; // arbitrary value
+        ip1->protocol = 254; // 254 for simDNS
+        ip1->saddr = inet_addr("127.0.0.1"); 
+        ip1->daddr = inet_addr("127.0.0.1"); 
+
+        memcpy(packet + sizeof(struct ethhdr) + sizeof(struct iphdr), &resPacket, sizeof(simDNSResponse));
 
         struct sockaddr_ll dest;
         memset(&dest, 0, sizeof(dest));
         dest.sll_family = AF_PACKET;
         dest.sll_protocol = htons(ETH_P_ALL);
+        sscanf(destMAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &dest.sll_addr[0], &dest.sll_addr[1], &dest.sll_addr[2], &dest.sll_addr[3], &dest.sll_addr[4], &dest.sll_addr[5]);
+        dest.sll_ifindex = if_nametoindex("enp0s25"); 
 
-        sendto(sockfd, &resPacket, sizeof(simDNSResponse), 0, (struct sockaddr *)&dest, sizeof(dest));
+        if(sendto(sockfd, packet, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(simDNSResponse), 0, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
+            perror("sendto");
+            return 1;
+        }
 
     }
 
