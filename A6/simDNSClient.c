@@ -48,6 +48,22 @@ typedef struct _pendingQuery {
     struct timeval tv; 
 } pendingQuery;
 
+// to strip extra spaces from the input string
+void strip(char* s) {
+    char* start = s;
+    char* end = s + strlen(s);
+
+    while (isspace((unsigned char)*start)) start++;
+
+    if (end > start) {
+        while (isspace((unsigned char)*(end - 1))) end--;
+    }
+
+    memmove(s, start, end - start);
+
+    s[end - start] = '\0';
+}
+
 int domainNameIsValid(char *domain) {
     // 1. only alphanumeric characters, except hyphen (but not at the beginning or end), also no consecutive hyphens. dots are allowed
     // 2. minimum length of 3, maximum length of 31 
@@ -74,7 +90,7 @@ int domainNameIsValid(char *domain) {
     return 1;
 }
 
-void constructPacket(char packet[65536], char *destMAC, simDNSQuery qryPacket) {
+void constructPacket(char packet[1024], char *destMAC, simDNSQuery qryPacket) {
 
     struct ethhdr *eth = (struct ethhdr *)packet;
     memset(eth->h_source, 0, 6); 
@@ -137,11 +153,16 @@ int main(int argc, char* argv[]) {
         fgets(query, 100, stdin);
         query[strlen(query)-1] = '\0';
 
+        strip(query);
+
         if(strcmp(query, "EXIT") == 0) {
             break;
         }
 
-        char *token = strtok(query, " ");
+        char query_copy[100];
+        strcpy(query_copy, query);
+
+        char *token = strtok(query_copy, " ");
         if(strcmp(token, "getIP") != 0) {
             printf("Error: Query format: getIP N <domain-1> <domain-2> ... <domain-N> \n");
             continue;
@@ -154,18 +175,33 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
+        // check if number of query strings matches N
+        int count = 0;
+        for(int i=0; i<strlen(query); i++) {
+            if(query[i] == ' ') count++;
+        }
+
+        if(count != N+1) {
+            printf("Error: Number of query strings should match N\n");
+            continue;
+        }
+        
+        // check if all domain names are valids
+        int invalid_flag = 0;
         char domains[N][32];
         for(int i=0; i<N; i++) {
             char *domain = strtok(NULL, " ");
             if(!domainNameIsValid(domain)) {
-                printf("Error: Invalid domain name <%s>\n", domain);
+                printf("Error: Invalid domain name: %s\n", domain);
+                invalid_flag = 1;
                 continue;
             }
             strcpy(domains[i], domain);
         }
+        if(invalid_flag) {continue;} 
+
 
         // construct simDNS packet
-
         simDNSQuery qryPacket;
         qryPacket.id = curr_ID++;
         qryPacket.type = 0; 
@@ -175,7 +211,7 @@ int main(int argc, char* argv[]) {
             strcpy(qryPacket.queries[i].domain, domains[i]);
         }
 
-        char packet[65536];
+        char packet[1024];
         constructPacket(packet, destMAC, qryPacket);
 
         struct sockaddr_ll addr;
@@ -216,7 +252,8 @@ int main(int argc, char* argv[]) {
         }
 
         if(FD_ISSET(sockfd, &fds)) {
-            while(1){
+            int queryIsPending = 1;
+            while(queryIsPending){
                 int timeout_flag = 0;
 
                 // check if timeout has occured for any pending query
@@ -241,16 +278,19 @@ int main(int argc, char* argv[]) {
                                 }
                             }
 
-                            char packet[65536];
+                            char packet[1024];
                             constructPacket(packet, destMAC, qryPacket);
 
                             if(sendto(sockfd, packet, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(simDNSQuery), 0, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
                                 perror("sendto");
                                 return 1;
                             }
+
                         }
                         if(pendingQueries[i].timeoutCount > 3) {
+                            printf("\n----------------------------------------\n");
                             printf("Error: Timeout for query ID: %d\n", i);
+                            printf("----------------------------------------\n\n");
                             pendingQueries[i].timeoutCount = 0;
                     }
                     }
@@ -258,31 +298,26 @@ int main(int argc, char* argv[]) {
 
                 if(timeout_flag) {break;}
 
-                char packet[65536];
-                int len = recvfrom(sockfd, packet, 65536, 0, NULL, NULL);
+                char packet[1024];
+                int len = recvfrom(sockfd, packet, 1024, 0, NULL, NULL);
                 if(len < 0) {
                     perror("recvfrom");
                     return 1;
                 }
 
                 // check ethernet and IP headers
-
                 struct ethhdr *eth = (struct ethhdr *)packet;
-                if(ntohs(eth->h_proto) != ETH_P_IP) {
-                    continue;
-                }
+                if(ntohs(eth->h_proto) != ETH_P_IP) {continue;}
 
                 struct iphdr *ip = (struct iphdr *)(packet + sizeof(struct ethhdr));
-                // printf("protocol value is %d\n", ip->protocol);
-                if(ip->protocol != 254) {
-                    continue;
-                }
+                if(ip->protocol != 254) {continue;}
 
                 // extract the data and process response
                 simDNSResponse resPacket;
                 memcpy(&resPacket, packet + sizeof(struct ethhdr) + sizeof(struct iphdr), sizeof(simDNSResponse));
 
                 if(pendingQueries[resPacket.id].timeoutCount >= 1) {
+                    printf("----------------------------------------\n");
                     printf("Query ID: %d\n", resPacket.id);
                     printf("Total query strings: %d\n", resPacket.n_responses);
                     for(int i=0; i<resPacket.n_responses; i++) {
@@ -292,10 +327,18 @@ int main(int argc, char* argv[]) {
                             printf("%s: IP not found\n", pendingQueries[resPacket.id].queries[i].domain);
                         }
                     }
+                    printf("----------------------------------------\n");
                     pendingQueries[resPacket.id].timeoutCount = 0;
                 }
 
-                break;
+                for(int i=0; i<1000; i++) {
+                    if(pendingQueries[i].timeoutCount >= 1) {
+                        queryIsPending = 1;
+                        break;
+                    } else {
+                        queryIsPending = 0;
+                    }
+                }
             }
         }
         }

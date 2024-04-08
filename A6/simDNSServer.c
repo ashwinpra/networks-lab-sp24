@@ -16,7 +16,7 @@
 #include <netinet/if_ether.h>
 #include <netpacket/packet.h>
 
-#define p 0.5
+#define p 0.1
 
 typedef struct _query {
     int len;
@@ -67,14 +67,12 @@ int main() {
         return 1;
     }
 
-    // printf("Socket %d created and bound\n", sockfd);
-
     // read all packets received on the socket
     while(1) {
 
         // read the packet including headers 
-        char packet[65536];
-        int len = recvfrom(sockfd, packet, 65536, 0, NULL, NULL);
+        char packet[1024];
+        int len = recvfrom(sockfd, packet, 1024, 0, NULL, NULL);
         if(len < 0) {
             perror("recvfrom");
             return 1;
@@ -82,9 +80,7 @@ int main() {
 
         // extract the Ethernet header
         struct ethhdr *eth = (struct ethhdr *)packet;
-        if(ntohs(eth->h_proto) != ETH_P_IP) {
-            continue;
-        }
+        if(ntohs(eth->h_proto) != ETH_P_IP) {continue;}
 
         // get source MAC to send response later
         char destMAC[18];
@@ -92,14 +88,9 @@ int main() {
 
         // extract the IP header
         struct iphdr *ip = (struct iphdr *)(packet + sizeof(struct ethhdr));
-        if(ip->protocol != 254) {
-            continue;
-        }
+        if(ip->protocol != 254) {continue;}
 
-        if(dropMessage(p)){
-            printf("Dropped!\n");
-            continue;
-        }
+        if(dropMessage(p)){continue;}
 
 
         // extract the data
