@@ -139,6 +139,9 @@ int main(int argc, char* argv[]) {
     addr.sll_family = AF_PACKET;
     addr.sll_protocol = htons(ETH_P_ALL);
     addr.sll_ifindex = if_nametoindex(interface);
+    sscanf(destMAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &addr.sll_addr[0], &addr.sll_addr[1], &addr.sll_addr[2], &addr.sll_addr[3], &addr.sll_addr[4], &addr.sll_addr[5]);
+
+
     if(bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         perror("bind");
         return 1;
@@ -165,14 +168,19 @@ int main(int argc, char* argv[]) {
 
         char *token = strtok(query_copy, " ");
         if(strcmp(token, "getIP") != 0) {
-            printf("Error: Query format: getIP N <domain-1> <domain-2> ... <domain-N> \n");
+            printf("Error: Query format: getIP N <domain-1> <domain-2> ... <domain-N> \n\n");
             continue;
         }
 
         int N = atoi(strtok(NULL, " "));
 
+        if(N == 0) {
+            printf("Error: N should be a valid number\n\n");
+            continue;
+        }
+
         if(N>8) {
-            printf("Error: N should be less than or equal to 8\n");
+            printf("Error: N should be less than or equal to 8\n\n");
             continue;
         }
 
@@ -183,7 +191,7 @@ int main(int argc, char* argv[]) {
         }
 
         if(count != N+1) {
-            printf("Error: Number of query strings should match N\n");
+            printf("Error: Number of query strings should match N\n\n");
             continue;
         }
         
@@ -214,12 +222,6 @@ int main(int argc, char* argv[]) {
 
         char packet[1024];
         constructPacket(packet, destMAC, qryPacket);
-
-        struct sockaddr_ll addr;
-        addr.sll_family = AF_PACKET;
-        addr.sll_protocol = htons(ETH_P_ALL);
-        sscanf(destMAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &addr.sll_addr[0], &addr.sll_addr[1], &addr.sll_addr[2], &addr.sll_addr[3], &addr.sll_addr[4], &addr.sll_addr[5]);
-        addr.sll_ifindex = if_nametoindex("enp0s25");
 
         if(sendto(sockfd, packet, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(simDNSQuery), 0, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
             perror("sendto");

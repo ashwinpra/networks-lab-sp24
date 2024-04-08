@@ -146,7 +146,7 @@ int main(int argc, char* argv[]) {
         dest.sll_family = AF_PACKET;
         dest.sll_protocol = htons(ETH_P_ALL);
         sscanf(destMAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &dest.sll_addr[0], &dest.sll_addr[1], &dest.sll_addr[2], &dest.sll_addr[3], &dest.sll_addr[4], &dest.sll_addr[5]);
-        dest.sll_ifindex = if_nametoindex("enp0s25"); 
+        dest.sll_ifindex = if_nametoindex(interface);
 
         if(sendto(sockfd, packet, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(simDNSResponse), 0, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
             perror("sendto");
