@@ -16,6 +16,8 @@
 #include <arpa/inet.h>
 #include <netpacket/packet.h>
 #include <net/if.h>
+#include <ctype.h>
+#include <sys/time.h>
 
 #define T 5 // timeout in seconds
 
@@ -114,15 +116,14 @@ void constructPacket(char packet[1024], char *destMAC, simDNSQuery qryPacket) {
 
 int main(int argc, char* argv[]) {
 
-    if(argc != 2) {
-        printf("Usage: %s <dest-MAC>\n", argv[0]);
+    if(argc != 3) {
+        printf("Usage: %s <dest-MAC> <interface>\n", argv[0]);
         return 1;
     }
 
     char *destMAC = argv[1];
+    char* interface = argv[2];
      
-    printf("Welcome to simDNS Client\n");
-
     int curr_ID = 0; 
     pendingQuery pendingQueries[1000];
     memset(pendingQueries, 0, sizeof(pendingQueries));
@@ -137,7 +138,7 @@ int main(int argc, char* argv[]) {
     struct sockaddr_ll addr;
     addr.sll_family = AF_PACKET;
     addr.sll_protocol = htons(ETH_P_ALL);
-    addr.sll_ifindex = if_nametoindex("enp0s25");
+    addr.sll_ifindex = if_nametoindex(interface);
     if(bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         perror("bind");
         return 1;
@@ -317,7 +318,7 @@ int main(int argc, char* argv[]) {
                 memcpy(&resPacket, packet + sizeof(struct ethhdr) + sizeof(struct iphdr), sizeof(simDNSResponse));
 
                 if(pendingQueries[resPacket.id].timeoutCount >= 1) {
-                    printf("----------------------------------------\n");
+                    printf("\n----------------------------------------\n");
                     printf("Query ID: %d\n", resPacket.id);
                     printf("Total query strings: %d\n", resPacket.n_responses);
                     for(int i=0; i<resPacket.n_responses; i++) {
@@ -327,7 +328,7 @@ int main(int argc, char* argv[]) {
                             printf("%s: IP not found\n", pendingQueries[resPacket.id].queries[i].domain);
                         }
                     }
-                    printf("----------------------------------------\n");
+                    printf("----------------------------------------\n\n");
                     pendingQueries[resPacket.id].timeoutCount = 0;
                 }
 

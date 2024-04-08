@@ -15,6 +15,7 @@
 #include <arpa/inet.h>
 #include <netinet/if_ether.h>
 #include <netpacket/packet.h>
+#include <net/if.h>
 
 #define p 0.1
 
@@ -49,7 +50,14 @@ int dropMessage(float P){
     return 0;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    srand(time(0));
+
+    if(argc != 2) {
+        printf("Usage: %s <interface>\n", argv[0]);
+        return 1;
+    }
+
     // open a raw socket to capture all packets till Ethernet
     int sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if(sockfd < 0) {
@@ -57,10 +65,12 @@ int main() {
         return 1;
     }
 
+    char* interface = argv[1];
+
     struct sockaddr_ll addr;
     addr.sll_family = AF_PACKET;
     addr.sll_protocol = htons(ETH_P_ALL);
-    addr.sll_ifindex = if_nametoindex("enp0s25"); //todo: mention this in readme
+    addr.sll_ifindex = if_nametoindex(interface);
 
     if(bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         perror("bind");
