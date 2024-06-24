@@ -1,0 +1,147 @@
+ # Networks Lab Assignment 5 - Emulating End-to-End Reliable Flow Control over Unreliable Communication Channels
+
+--- 
+
+## How to run?
+- `make init` to start the `init` process that will handle sending and receiving of messages
+- `make user<i>` to start an instance of `user<i>`, where `i` can be between `1` to `4`
+- `make clean` to clean up all the executable and object files
+
+--- 
+
+## Average number of transmissions
+
+- A total of 100 messages were sent, and the average number of transmissions per message was calculated for different values of p
+  
+    | Probability of message being dropped (p)  | Average number of transmission/message |
+    |-------------------------------------------|----------------------------------------|
+    | 0.05                                      | 1.08                                   |
+    | 0.1                                       | 1.23                                   |
+    | 0.15                                      | 1.38                                   |
+    | 0.2                                       | 1.67                                   |
+    | 0.25                                      | 1.92                                   |
+    | 0.3                                       | 1.93                                   |
+    | 0.35                                      | 2.07                                   |
+    | 0.4                                       | 2.42                                   |
+    | 0.45                                      | 2.71                                   |
+    | 0.5                                       | 2.78                                   |
+
+---
+
+## Data structures used
+
+- #### SOCK_INFO (struct):
+    - `sockid`: socket descriptor of the socket trying to create a socket/bind
+    - `IP`: IP address of the socket
+    - `port`: port number of the socket
+    - `errno`: error number to be set in case of any error
+
+- #### packet_t (struct):
+    - `seq_no`: sequence number of the packet
+    - `message`: message to be sent/received
+
+- #### swnd_t (struct):
+    - `unack_msgs`: array of packets sent but not yet acknowledged
+    - `wndsize`: window size of the sender
+    - `window_start`: start index of the window
+    - `window_end`: end index of the window
+    - `curr_seq_no`: current sequence number
+    - `recv_wndsize`: window size indicating max number of messages that can be sent without receiving ACK
+    - `timestamp`: timestamp of the last message sent
+
+- #### rwnd_t (struct):
+    - `exp_msgs`: array of packets expected to be received
+    - `wndsize`: window size of the receiver - max number of messages that can be received based on buffer availability
+    - `window_start`: start index of the window
+    - `window_end`: end index of the window
+    - `curr_seq_no`: current sequence number
+
+- #### msocket_t (struct):
+    - `free`: 1 if the socket is free (can be used), 0 otherwise
+    - `pid`: pid of the process that created the socket
+    - `udpsockfd`: socket descriptor of the underlying UDP socket
+    - `ip`: IP address of the other end of the MTP socket
+    - `port`: port number of the other end of the MTP socket
+    - `swnd`: sender window (swnd_t type)
+    - `rwnd`: receiver window (rwnd_t type)
+    - `nospace`: 1 if no space in receiver buffer, 0 otherwise
+    - `msg_count`: number of messages sent
+
+----------------------------------------------------------------------------------------------------------------------------
+
+## List of functions
+
+- `int m_socket(int domain, int type, int protocol)`
+    - Creates a socket and returns the socket descriptor
+    - Parameters:
+        - `domain`: AF_INET
+        - `type`: SOCK_MTP
+        - `protocol`: 0
+    - Returns:
+        - socket descriptor on success
+        - -1 on failure
+
+- `int m_bind(int sockfd, char *src_ip, int src_port, char *dest_ip, int dest_port)`
+    - Binds the socket to the given IP address and port number
+    - Parameters:
+        - `sockfd`: socket descriptor
+        - `src_ip`: IP address of the socket
+        - `src_port`: port number of the socket
+        - `dest_ip`: IP address of the other end of the MTP socket
+        - `dest_port`: port number of the other end of the MTP socket
+    - Returns:
+        - 0 on success
+        - -1 on failure
+
+- `int m_sendto(int sockfd, char* buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen)`
+    - Sends the message to the sender side send buffer if the IP/Port matches, else returns error
+    - Also returns error if send buffer is full
+    - Parameters:
+        - `sockfd`: socket descriptor
+        - `buf`: message to be sent
+        - `len`: length of the message
+        - `flags`: 0
+        - `dest_addr`: address of the other end of the MTP socket
+        - `addrlen`: length of the address
+    - Returns:
+        - number of bytes sent on success
+        - -1 on failure
+
+- `int m_recvfrom(int sockfd, char* buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen)`
+    - Looks up the receiver side receive buffer and returns the first in-order message, and deletes it from the buffer 
+    - Returns error if no message is available
+    - Parameters:
+        - `sockfd`: socket descriptor
+        - `buf`: buffer to store the received message
+        - `len`: length of the buffer
+        - `flags`: 0
+        - `src_addr`: address of the other end of the MTP socket
+        - `addrlen`: length of the address
+    - Returns:
+        - number of bytes received on success
+        - -1 on failure
+
+- `int m_close(int sockfd)`
+    - Closes the socket by setting the free flag to 1
+    - Parameters:
+        - `sockfd`: socket descriptor
+    - Returns:
+        - 0 on success
+        - -1 on failure
+
+- `int dropMessage(float P)`
+    - Drops the message with probability P
+    - Parameters:
+        - `P`: probability of dropping the message
+    - Returns:
+        - 1 if message is dropped
+        - 0 otherwise
+
+- `int getmsgcount(int sockfd)`
+    - Returns the number of messages sent by the socket
+    - Parameters:
+        - `sockfd`: socket descriptor
+    - Returns:
+        - number of messages sent
+
+
